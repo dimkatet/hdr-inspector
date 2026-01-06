@@ -11,11 +11,11 @@ echo "🏗️  Building project..."
 pnpm build
 
 echo "📦 Deploying to /var/www/hdr-inspector/..."
-sudo rm -rf /var/www/hdr-inspector/*
-sudo cp -r ./dist/* /var/www/hdr-inspector/
+rm -rf /var/www/hdr-inspector/*
+cp -r ./dist/* /var/www/hdr-inspector/
 
 echo "🔄 Restarting Caddy..."
-sudo systemctl restart caddy
+systemctl restart caddy
 
 echo "✅ Deployment complete!"
 echo "🌐 Your site should now be live"
