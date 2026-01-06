@@ -25,9 +25,6 @@ export class WebGPURenderer {
   private sampler!: GPUSampler;
   private uniformBuffer!: GPUBuffer;
 
-  private imageWidth = 0;
-  private imageHeight = 0;
-
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
   }
@@ -101,9 +98,6 @@ export class WebGPURenderer {
       const adapter = await navigator.gpu.requestAdapter();
       if (!adapter) return false;
 
-      // Check format capabilities
-      const canvasFormats = navigator.gpu.getPreferredCanvasFormat();
-
       // Try to create a test texture with rgba16float
       const testTexture = this.device.createTexture({
         size: { width: 1, height: 1 },
@@ -128,9 +122,6 @@ export class WebGPURenderer {
    */
   uploadImage(image: LinearImage): void {
     console.log('[WebGPURenderer] Uploading image:', image.width, 'x', image.height);
-
-    this.imageWidth = image.width;
-    this.imageHeight = image.height;
 
     // Update canvas size to match image
     this.canvas.width = image.width;
