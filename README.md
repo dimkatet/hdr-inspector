@@ -77,7 +77,23 @@ pnpm dev
 
 # Build for production
 pnpm build
+
+# Deploy to server (requires sudo access)
+pnpm deploy
 ```
+
+### Deployment
+
+The `pnpm deploy` command will:
+1. Install dependencies
+2. Build the project
+3. Copy files to `/var/www/hdr-inspector/`
+4. Restart Caddy web server
+
+**Requirements:**
+- sudo access on the target machine
+- Caddy web server installed and configured
+- Target directory `/var/www/hdr-inspector/` must exist
 
 ### Testing
 

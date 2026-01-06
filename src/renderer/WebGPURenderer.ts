@@ -61,16 +61,38 @@ export class WebGPURenderer {
     const supportsHDR = await this.checkHDRSupport();
     console.log('[WebGPURenderer] HDR support:', supportsHDR);
 
-    // Configure canvas context
-    this.context.configure({
-      device: this.device,
-      format: supportsHDR ? 'rgba16float' : preferredFormat,
-      alphaMode: 'opaque',
-      // @ts-ignore - colorSpace is experimental but works
-      colorSpace: supportsHDR ? 'rec2020' : 'srgb',
-      // @ts-ignore - toneMapping is experimental
-      toneMapping: supportsHDR ? { mode: 'extended' } : undefined,
-    });
+    // Configure canvas context with fallback for unsupported color spaces
+    // Safari/macOS supports 'display-p3' (wide gamut), but not 'rec2020'
+    // Chrome/Windows may support 'rec2020' with HDR displays
+    const preferredColorSpace = this.getPreferredColorSpace();
+    console.log('[WebGPURenderer] Trying color space:', preferredColorSpace);
+
+    // Try to configure with preferred color space, fallback if not supported
+    try {
+      this.context.configure({
+        device: this.device,
+        format: supportsHDR ? 'rgba16float' : preferredFormat,
+        alphaMode: 'opaque',
+        // @ts-expect-error - 2020 color spaces may not be recognized yet
+        colorSpace: preferredColorSpace,
+        toneMapping: supportsHDR ? { mode: 'extended' } : undefined,
+      });
+      console.log('[WebGPURenderer] Successfully configured with color space:', preferredColorSpace);
+    } catch {
+      // If preferred color space fails (e.g., rec2020 on Safari), fallback to p3 or srgb
+      console.warn('[WebGPURenderer] Failed to configure with', preferredColorSpace, '- trying fallback');
+
+      const fallback = preferredColorSpace === 'rec2020' ? 'display-p3' : 'srgb';
+
+      this.context.configure({
+        device: this.device,
+        format: supportsHDR ? 'rgba16float' : preferredFormat,
+        alphaMode: 'opaque',
+        colorSpace: fallback,
+        toneMapping: supportsHDR ? { mode: 'extended' } : undefined,
+      });
+      console.log('[WebGPURenderer] Configured with fallback color space:', fallback);
+    }
 
     // Create sampler
     this.sampler = this.device.createSampler({
@@ -87,6 +109,33 @@ export class WebGPURenderer {
     });
 
     console.log('[WebGPURenderer] Initialized successfully');
+  }
+
+  /**
+   * Get preferred color space for canvas configuration
+   * - rec2020: Widest gamut, supported on some Windows HDR setups (Chrome)
+   * - display-p3: Wide gamut, supported on macOS (Safari, Chrome)
+   * - srgb: Standard gamut, universal fallback
+   */
+  private getPreferredColorSpace(): 'srgb' | 'display-p3' | 'rec2020' {
+    // Try rec2020 first if display supports it
+    // Note: Safari doesn't support 'rec2020' in WebGPU canvas even if display does
+    // We'll let it fail gracefully and catch in configure() if needed
+    if (window.matchMedia('(color-gamut: rec2020)').matches) {
+      // Check if we're on Safari (which doesn't support rec2020 in WebGPU)
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (!isSafari) {
+        return 'rec2020';
+      }
+    }
+
+    // Fallback to P3 if supported
+    if (window.matchMedia('(color-gamut: p3)').matches) {
+      return 'display-p3';
+    }
+
+    // Final fallback to sRGB
+    return 'srgb';
   }
 
   /**
