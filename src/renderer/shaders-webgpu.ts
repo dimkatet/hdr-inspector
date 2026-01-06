@@ -115,9 +115,18 @@ fn linearToSRGB(linear: vec3<f32>) -> vec3<f32> {
 }
 
 // Linear to PQ (ST.2084) for HDR output
-fn linearToPQ(linear: vec3<f32>, maxNits: f32) -> vec3<f32> {
-  // Normalize to [0, 1] based on 10000 nits reference
-  let Y = linear * (maxNits / 10000.0);
+// Input: scene-referred linear RGB where 1.0 = diffuse white
+// diffuseWhiteNits: luminance of diffuse white in nits (typically 203 nits)
+fn linearToPQ(linear: vec3<f32>, diffuseWhiteNits: f32) -> vec3<f32> {
+  // Convert scene-referred to absolute luminance in nits
+  // In scene-referred space: 1.0 = diffuse white, >1.0 = specular/emissive
+  let absoluteNits = linear * diffuseWhiteNits;
+
+  // Normalize to [0, 1] based on 10000 nits PQ reference
+  let Y = absoluteNits / 10000.0;
+
+  // Clamp to valid range (shouldn't exceed 10000 nits)
+  let Y_clamped = clamp(Y, vec3<f32>(0.0), vec3<f32>(1.0));
 
   // PQ constants (SMPTE ST 2084)
   let m1 = 0.1593017578125;      // 2610 / 16384
@@ -126,7 +135,7 @@ fn linearToPQ(linear: vec3<f32>, maxNits: f32) -> vec3<f32> {
   let c2 = 18.8515625;            // 2413 / 128 * 32
   let c3 = 18.6875;               // 2392 / 128 * 32
 
-  let Ym1 = pow(Y, vec3<f32>(m1));
+  let Ym1 = pow(Y_clamped, vec3<f32>(m1));
   let N = (c1 + c2 * Ym1) / (1.0 + c3 * Ym1);
   return pow(N, vec3<f32>(m2));
 }
@@ -156,37 +165,60 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   // Apply exposure
   rgb = applyExposure(rgb, uniforms.exposure);
 
-  // Apply tone mapping
-  let op = i32(uniforms.toneMapping);
-  var tonemapped = applyToneMapping(rgb, op);
-
-  // Visualization modes
   var color: vec3<f32>;
   let vizMode = i32(uniforms.visualizationMode);
 
-  if (vizMode == 1) {
-    // False-color luminance
-    let lum = luminance(tonemapped);
-    color = turboColormap(lum);
-  } else if (vizMode == 2) {
-    // Clipping visualization
-    let clipped = any(tonemapped > vec3<f32>(1.0));
-    if (clipped) {
-      color = vec3<f32>(1.0, 0.0, 1.0); // Magenta
+  // In HDR mode, skip tone mapping and send linear values directly
+  if (uniforms.hdrMode > 0.5) {
+    // HDR mode: No tone mapping, work with linear values
+    // Standard diffuse white: 203 nits (per BT.2100)
+    let diffuseWhite = 203.0;
+
+    if (vizMode == 1) {
+      // False-color luminance (for visualization, apply tone mapping)
+      let tonemapped = toneMappingReinhard(rgb);
+      let lum = luminance(tonemapped);
+      color = turboColormap(lum);
+      // For false-color, output in sRGB (not PQ)
+      color = linearToSRGB(color);
+    } else if (vizMode == 2) {
+      // Clipping visualization (check against 10000 nits in scene-referred space)
+      let peakSceneReferred = 10000.0 / diffuseWhite; // ~49.26
+      let clipped = any(rgb > vec3<f32>(peakSceneReferred));
+      if (clipped) {
+        color = vec3<f32>(1.0, 0.0, 1.0); // Magenta
+        color = linearToSRGB(color);
+      } else {
+        // Show the HDR content
+        color = linearToPQ(rgb, diffuseWhite);
+      }
     } else {
-      color = tonemapped;
+      // RGB mode: Apply PQ to linear scene-referred values
+      color = linearToPQ(rgb, diffuseWhite);
     }
   } else {
-    // Default: RGB mode
-    color = tonemapped;
-  }
+    // SDR mode: Apply tone mapping
+    let op = i32(uniforms.toneMapping);
+    var tonemapped = applyToneMapping(rgb, op);
 
-  // Apply transfer function based on HDR mode
-  if (uniforms.hdrMode > 0.5) {
-    // HDR mode: Apply PQ encoding (1000 nits peak)
-    color = linearToPQ(color, 1000.0);
-  } else {
-    // SDR mode: Apply sRGB encoding
+    if (vizMode == 1) {
+      // False-color luminance
+      let lum = luminance(tonemapped);
+      color = turboColormap(lum);
+    } else if (vizMode == 2) {
+      // Clipping visualization
+      let clipped = any(tonemapped > vec3<f32>(1.0));
+      if (clipped) {
+        color = vec3<f32>(1.0, 0.0, 1.0); // Magenta
+      } else {
+        color = tonemapped;
+      }
+    } else {
+      // RGB mode
+      color = tonemapped;
+    }
+
+    // Apply sRGB encoding for SDR display
     color = linearToSRGB(color);
   }
 

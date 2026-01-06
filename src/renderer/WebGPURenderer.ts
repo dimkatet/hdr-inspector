@@ -61,37 +61,62 @@ export class WebGPURenderer {
     const supportsHDR = await this.checkHDRSupport();
     console.log('[WebGPURenderer] HDR support:', supportsHDR);
 
-    // Configure canvas context with fallback for unsupported color spaces
-    // Safari/macOS supports 'display-p3' (wide gamut), but not 'rec2020'
-    // Chrome/Windows may support 'rec2020' with HDR displays
+    // Configure canvas context for HDR output
+    // CRITICAL: For HDR output, we need:
+    // 1. rgba16float format (to store values > 1.0)
+    // 2. toneMapping: { mode: 'extended' } (tells browser NOT to apply its own tone mapping)
+    // 3. colorSpace matching display capabilities
+
     const preferredColorSpace = this.getPreferredColorSpace();
     console.log('[WebGPURenderer] Trying color space:', preferredColorSpace);
+    console.log('[WebGPURenderer] HDR format:', supportsHDR ? 'rgba16float' : preferredFormat);
 
-    // Try to configure with preferred color space, fallback if not supported
+    // Try to configure with preferred settings
     try {
-      this.context.configure({
+      const config: GPUCanvasConfiguration = {
         device: this.device,
         format: supportsHDR ? 'rgba16float' : preferredFormat,
         alphaMode: 'opaque',
-        // @ts-expect-error - 2020 color spaces may not be recognized yet
-        colorSpace: preferredColorSpace,
-        toneMapping: supportsHDR ? { mode: 'extended' } : undefined,
+        colorSpace: preferredColorSpace as PredefinedColorSpace,
+      };
+
+      // CRITICAL: toneMapping.mode = 'extended' tells the browser:
+      // "Don't apply any tone mapping, I'm giving you values in extended range [0, max_nits]"
+      // This is REQUIRED for HDR output to work correctly
+      if (supportsHDR) {
+        config.toneMapping = { mode: 'extended' };
+      }
+
+      this.context.configure(config);
+      console.log('[WebGPURenderer] Successfully configured:', {
+        format: config.format,
+        colorSpace: config.colorSpace,
+        toneMapping: config.toneMapping,
       });
-      console.log('[WebGPURenderer] Successfully configured with color space:', preferredColorSpace);
-    } catch {
-      // If preferred color space fails (e.g., rec2020 on Safari), fallback to p3 or srgb
-      console.warn('[WebGPURenderer] Failed to configure with', preferredColorSpace, '- trying fallback');
+    } catch (error) {
+      // If preferred color space fails (e.g., rec2020 on Safari), fallback
+      console.warn('[WebGPURenderer] Failed to configure with', preferredColorSpace, error);
 
       const fallback = preferredColorSpace === 'rec2020' ? 'display-p3' : 'srgb';
+      console.log('[WebGPURenderer] Trying fallback color space:', fallback);
 
-      this.context.configure({
+      const config: GPUCanvasConfiguration = {
         device: this.device,
         format: supportsHDR ? 'rgba16float' : preferredFormat,
         alphaMode: 'opaque',
-        colorSpace: fallback,
-        toneMapping: supportsHDR ? { mode: 'extended' } : undefined,
+        colorSpace: fallback as PredefinedColorSpace,
+      };
+
+      if (supportsHDR) {
+        config.toneMapping = { mode: 'extended' };
+      }
+
+      this.context.configure(config);
+      console.log('[WebGPURenderer] Configured with fallback:', {
+        format: config.format,
+        colorSpace: config.colorSpace,
+        toneMapping: config.toneMapping,
       });
-      console.log('[WebGPURenderer] Configured with fallback color space:', fallback);
     }
 
     // Create sampler
