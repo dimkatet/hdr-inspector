@@ -24,6 +24,8 @@ export class WebGPURenderer {
   private texture!: GPUTexture;
   private sampler!: GPUSampler;
   private uniformBuffer!: GPUBuffer;
+  private supportsHDR: boolean = false;
+  private currentHDRMode: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -58,8 +60,8 @@ export class WebGPURenderer {
     console.log('[WebGPURenderer] Preferred format:', preferredFormat);
 
     // Configure context for HDR (will try rgba16float, fallback to bgra8unorm)
-    const supportsHDR = await this.checkHDRSupport();
-    console.log('[WebGPURenderer] HDR support:', supportsHDR);
+    this.supportsHDR = await this.checkHDRSupport();
+    console.log('[WebGPURenderer] HDR support:', this.supportsHDR);
 
     // Configure canvas context for HDR output
     // CRITICAL: For HDR output, we need:
@@ -67,15 +69,15 @@ export class WebGPURenderer {
     // 2. toneMapping: { mode: 'extended' } (tells browser NOT to apply its own tone mapping)
     // 3. colorSpace matching display capabilities
 
-    const preferredColorSpace = this.getPreferredColorSpace();
+    const preferredColorSpace = this.getPreferredColorSpace(false); // SDR for initial config
     console.log('[WebGPURenderer] Trying color space:', preferredColorSpace);
-    console.log('[WebGPURenderer] HDR format:', supportsHDR ? 'rgba16float' : preferredFormat);
+    console.log('[WebGPURenderer] HDR format:', this.supportsHDR ? 'rgba16float' : preferredFormat);
 
     // Try to configure with preferred settings
     try {
       const config: GPUCanvasConfiguration = {
         device: this.device,
-        format: supportsHDR ? 'rgba16float' : preferredFormat,
+        format: this.supportsHDR ? 'rgba16float' : preferredFormat,
         alphaMode: 'opaque',
         colorSpace: preferredColorSpace as PredefinedColorSpace,
       };
@@ -83,7 +85,7 @@ export class WebGPURenderer {
       // CRITICAL: toneMapping.mode = 'extended' tells the browser:
       // "Don't apply any tone mapping, I'm giving you values in extended range [0, max_nits]"
       // This is REQUIRED for HDR output to work correctly
-      if (supportsHDR) {
+      if (this.supportsHDR) {
         config.toneMapping = { mode: 'extended' };
       }
 
@@ -102,12 +104,12 @@ export class WebGPURenderer {
 
       const config: GPUCanvasConfiguration = {
         device: this.device,
-        format: supportsHDR ? 'rgba16float' : preferredFormat,
+        format: this.supportsHDR ? 'rgba16float' : preferredFormat,
         alphaMode: 'opaque',
         colorSpace: fallback as PredefinedColorSpace,
       };
 
-      if (supportsHDR) {
+      if (this.supportsHDR) {
         config.toneMapping = { mode: 'extended' };
       }
 
@@ -138,29 +140,48 @@ export class WebGPURenderer {
 
   /**
    * Get preferred color space for canvas configuration
-   * - rec2020: Widest gamut, supported on some Windows HDR setups (Chrome)
-   * - display-p3: Wide gamut, supported on macOS (Safari, Chrome)
-   * - srgb: Standard gamut, universal fallback
+   *
+   * @param hdrMode - true for HDR rendering, false for SDR
+   *
+   * HDR mode: Returns linear color spaces (srgb-linear) for linear RGB output
+   * SDR mode: Returns standard color spaces (srgb) for gamma-encoded output
+   *
+   * Future: Could return rec2020/display-p3 for PQ/HLG emulation modes
    */
-  private getPreferredColorSpace(): 'srgb' | 'display-p3' | 'rec2020' {
-    // Try rec2020 first if display supports it
-    // Note: Safari doesn't support 'rec2020' in WebGPU canvas even if display does
-    // We'll let it fail gracefully and catch in configure() if needed
-    if (window.matchMedia('(color-gamut: rec2020)').matches) {
-      // Check if we're on Safari (which doesn't support rec2020 in WebGPU)
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      if (!isSafari) {
-        return 'rec2020';
-      }
+  private getPreferredColorSpace(hdrMode: boolean): 'srgb' | 'srgb-linear' | 'display-p3' | 'rec2020' {
+    if (hdrMode) {
+      // HDR mode: Use linear color space
+      // Browser will apply PQ encoding automatically with toneMapping: extended
+      return 'srgb-linear';
+    } else {
+      // SDR mode: Use standard sRGB
+      // We'll apply sRGB encoding in shader
+      return 'srgb';
+    }
+  }
+
+  /**
+   * Reconfigure canvas color space when HDR mode changes
+   */
+  private reconfigureCanvas(hdrMode: boolean): void {
+    const colorSpace = this.getPreferredColorSpace(hdrMode);
+    const preferredFormat = navigator.gpu.getPreferredCanvasFormat();
+
+    console.log('[WebGPURenderer] Reconfiguring canvas for', hdrMode ? 'HDR' : 'SDR');
+    console.log('  - Color space:', colorSpace);
+
+    const config: GPUCanvasConfiguration = {
+      device: this.device,
+      format: this.supportsHDR ? 'rgba16float' : preferredFormat,
+      alphaMode: 'opaque',
+      colorSpace: colorSpace as PredefinedColorSpace,
+    };
+
+    if (this.supportsHDR) {
+      config.toneMapping = { mode: 'extended' };
     }
 
-    // Fallback to P3 if supported
-    if (window.matchMedia('(color-gamut: p3)').matches) {
-      return 'display-p3';
-    }
-
-    // Final fallback to sRGB
-    return 'srgb';
+    this.context.configure(config);
   }
 
   /**
@@ -319,6 +340,12 @@ export class WebGPURenderer {
    * Render with current settings
    */
   render(options: WebGPURenderOptions): void {
+    // Reconfigure canvas if HDR mode changed
+    if (options.hdrMode !== this.currentHDRMode) {
+      this.reconfigureCanvas(options.hdrMode);
+      this.currentHDRMode = options.hdrMode;
+    }
+
     // Update uniforms
     const uniforms = new Float32Array([
       options.exposure,

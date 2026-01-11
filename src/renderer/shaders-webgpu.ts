@@ -168,33 +168,34 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   var color: vec3<f32>;
   let vizMode = i32(uniforms.visualizationMode);
 
-  // In HDR mode, skip tone mapping and send linear values directly
+  // In HDR mode, output linear values directly (browser applies PQ automatically)
   if (uniforms.hdrMode > 0.5) {
-    // HDR mode: No tone mapping, work with linear values
-    // Standard diffuse white: 203 nits (per BT.2100)
-    let diffuseWhite = 203.0;
+    // HDR mode: Browser applies PQ encoding automatically when toneMapping: extended
+    // Just output linear scene-referred RGB values
 
     if (vizMode == 1) {
-      // False-color luminance (for visualization, apply tone mapping)
+      // False-color luminance (for visualization, apply tone mapping first)
       let tonemapped = toneMappingReinhard(rgb);
       let lum = luminance(tonemapped);
       color = turboColormap(lum);
-      // For false-color, output in sRGB (not PQ)
+      // For false-color, output in sRGB (not linear)
       color = linearToSRGB(color);
     } else if (vizMode == 2) {
-      // Clipping visualization (check against 10000 nits in scene-referred space)
-      let peakSceneReferred = 10000.0 / diffuseWhite; // ~49.26
-      let clipped = any(rgb > vec3<f32>(peakSceneReferred));
+      // Clipping visualization
+      // Check if any channel > some threshold (e.g., 10.0 = very bright)
+      let clipped = any(rgb > vec3<f32>(10.0));
       if (clipped) {
-        color = vec3<f32>(1.0, 0.0, 1.0); // Magenta
-        color = linearToSRGB(color);
+        color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        // Show the HDR content
-        color = linearToPQ(rgb, diffuseWhite);
+        // Output linear RGB directly
+        color = rgb;
       }
     } else {
-      // RGB mode: Apply PQ to linear scene-referred values
-      color = linearToPQ(rgb, diffuseWhite);
+      // RGB mode: Output linear values directly
+      // Browser will apply PQ encoding automatically
+      // Scale to match expected brightness (adjust multiplier as needed)
+      // Try values between 1.0 (current) and 2.5 (brighter midtones)
+      color = rgb;
     }
   } else {
     // SDR mode: Apply tone mapping
