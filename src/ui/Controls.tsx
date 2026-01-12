@@ -4,17 +4,15 @@
  * UI controls for exposure, tone mapping, and visualization modes.
  */
 
-import type { RenderState, ToneMappingOperator, VisualizationMode } from '../types';
+import type { RenderState, ToneMappingOperator, VisualizationMode, ColorSpace } from '../types';
 
 interface ControlsProps {
   renderState: RenderState;
   onRenderStateChange: (state: RenderState) => void;
-  hdrMode: boolean;
-  onHdrModeChange: (enabled: boolean) => void;
   hdrAvailable: boolean;
 }
 
-export function Controls({ renderState, onRenderStateChange, hdrMode, onHdrModeChange, hdrAvailable }: ControlsProps) {
+export function Controls({ renderState, onRenderStateChange, hdrAvailable }: ControlsProps) {
   const handleExposureChange = (ev: number) => {
     onRenderStateChange({ ...renderState, exposure: ev });
   };
@@ -25,6 +23,14 @@ export function Controls({ renderState, onRenderStateChange, hdrMode, onHdrModeC
 
   const handleVisualizationModeChange = (mode: VisualizationMode) => {
     onRenderStateChange({ ...renderState, mode });
+  };
+
+  const handleHdrModeChange = (enabled: boolean) => {
+    onRenderStateChange({ ...renderState, hdrMode: enabled });
+  };
+
+  const handleColorSpaceChange = (colorSpace: ColorSpace) => {
+    onRenderStateChange({ ...renderState, colorSpace });
   };
 
   return (
@@ -107,12 +113,12 @@ export function Controls({ renderState, onRenderStateChange, hdrMode, onHdrModeC
       </div>
 
       {/* HDR Mode */}
-      <div>
+      <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'flex', alignItems: 'center', cursor: hdrAvailable ? 'pointer' : 'not-allowed', opacity: hdrAvailable ? 1 : 0.5 }}>
           <input
             type="checkbox"
-            checked={hdrMode}
-            onChange={(e) => onHdrModeChange(e.target.checked)}
+            checked={renderState.hdrMode}
+            onChange={(e) => handleHdrModeChange(e.target.checked)}
             disabled={!hdrAvailable}
             style={{ marginRight: '8px', width: '18px', height: '18px', cursor: hdrAvailable ? 'pointer' : 'not-allowed' }}
           />
@@ -124,6 +130,36 @@ export function Controls({ renderState, onRenderStateChange, hdrMode, onHdrModeC
           ) : (
             <>⚠️ HDR mode unavailable: Requires HDR monitor. On SDR display, this would produce very dark, incorrect output.</>
           )}
+        </p>
+      </div>
+
+      {/* Color Space */}
+      <div>
+        <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+          Color Space
+        </label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {(['srgb', 'display-p3'] as ColorSpace[]).map((cs) => (
+            <button
+              key={cs}
+              onClick={() => handleColorSpaceChange(cs)}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: renderState.colorSpace === cs ? '#4a9eff' : '#333',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 'bold',
+              }}
+            >
+              {cs === 'srgb' ? 'sRGB' : cs === 'display-p3' ? 'Display P3' : 'BT.2020'}
+            </button>
+          ))}
+        </div>
+        <p style={{ margin: '8px 0 0', fontSize: '12px', color: '#888', lineHeight: '1.4' }}>
+          Color space for output. Display P3 uses matrix transform from BT.709.
         </p>
       </div>
     </div>

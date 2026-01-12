@@ -17,12 +17,13 @@ function App() {
   const [image, setImage] = useState<LinearImage | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hdrMode, setHdrMode] = useState(false);
   const [hdrAvailable, setHdrAvailable] = useState(false);
   const [renderState, setRenderState] = useState<RenderState>({
     exposure: 0,
     toneMapping: 'reinhard',
     mode: 'rgb',
+    hdrMode: false,
+    colorSpace: 'srgb',
   });
 
   // Detect HDR capabilities on mount
@@ -84,7 +85,7 @@ function App() {
                   </p>
                 </div>
               )}
-              <ImageCanvas image={image} renderState={renderState} hdrMode={hdrMode} />
+              <ImageCanvas image={image} renderState={renderState} />
               <button
                 onClick={() => setImage(null)}
                 style={{
@@ -107,8 +108,6 @@ function App() {
               <Controls
                 renderState={renderState}
                 onRenderStateChange={setRenderState}
-                hdrMode={hdrMode}
-                onHdrModeChange={setHdrMode}
                 hdrAvailable={hdrAvailable}
               />
             </div>

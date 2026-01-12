@@ -38,6 +38,11 @@ export type ToneMappingOperator = 'none' | 'reinhard' | 'aces';
 export type VisualizationMode = 'rgb' | 'luminance' | 'clipping';
 
 /**
+ * Color space for rendering
+ */
+export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
+
+/**
  * Renderer state
  */
 export interface RenderState {
@@ -47,6 +52,10 @@ export interface RenderState {
   toneMapping: ToneMappingOperator;
   /** Visualization mode */
   mode: VisualizationMode;
+  /** HDR mode enabled */
+  hdrMode: boolean;
+  /** Color space for rendering */
+  colorSpace: ColorSpace;
 }
 
 /**

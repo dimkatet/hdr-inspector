@@ -11,10 +11,9 @@ import { WebGPURenderer } from '../renderer/WebGPURenderer';
 interface ImageCanvasProps {
   image: LinearImage | null;
   renderState: RenderState;
-  hdrMode?: boolean; // Enable PQ encoding for HDR displays
 }
 
-export function ImageCanvas({ image, renderState, hdrMode = false }: ImageCanvasProps) {
+export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<WebGPURenderer | null>(null);
   const previousImageRef = useRef<LinearImage | null>(null);
@@ -70,9 +69,10 @@ export function ImageCanvas({ image, renderState, hdrMode = false }: ImageCanvas
       exposure: renderState.exposure,
       toneMapping: renderState.toneMapping,
       visualizationMode: renderState.mode,
-      hdrMode,
+      hdrMode: renderState.hdrMode,
+      colorSpace: renderState.colorSpace,
     });
-  }, [image, renderState, hdrMode, isInitialized]);
+  }, [image, renderState, isInitialized]);
 
   if (error) {
     return (

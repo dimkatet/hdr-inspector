@@ -5,7 +5,7 @@
  * Supports native HDR output via PQ encoding when available.
  */
 
-import type { LinearImage } from '../types';
+import type { LinearImage, ColorSpace } from '../types';
 import { vertexShaderWGSL, fragmentShaderWGSL } from './shaders-webgpu';
 
 export interface WebGPURenderOptions {
@@ -13,6 +13,7 @@ export interface WebGPURenderOptions {
   toneMapping: 'none' | 'reinhard' | 'aces';
   visualizationMode: 'rgb' | 'luminance' | 'clipping';
   hdrMode: boolean; // true = PQ output, false = sRGB output
+  colorSpace: ColorSpace; // Color space for output
 }
 
 export class WebGPURenderer {
@@ -26,6 +27,7 @@ export class WebGPURenderer {
   private uniformBuffer!: GPUBuffer;
   private supportsHDR: boolean = false;
   private currentHDRMode: boolean = false;
+  private currentColorSpace: ColorSpace = 'srgb';
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -69,7 +71,7 @@ export class WebGPURenderer {
     // 2. toneMapping: { mode: 'extended' } (tells browser NOT to apply its own tone mapping)
     // 3. colorSpace matching display capabilities
 
-    const preferredColorSpace = this.getPreferredColorSpace(false); // SDR for initial config
+    const preferredColorSpace = 'srgb'; // sRGB for initial config
     console.log('[WebGPURenderer] Trying color space:', preferredColorSpace);
     console.log('[WebGPURenderer] HDR format:', this.supportsHDR ? 'rgba16float' : preferredFormat);
 
@@ -99,7 +101,7 @@ export class WebGPURenderer {
       // If preferred color space fails (e.g., rec2020 on Safari), fallback
       console.warn('[WebGPURenderer] Failed to configure with', preferredColorSpace, error);
 
-      const fallback = preferredColorSpace === 'rec2020' ? 'display-p3' : 'srgb';
+      const fallback = 'srgb';
       console.log('[WebGPURenderer] Trying fallback color space:', fallback);
 
       const config: GPUCanvasConfiguration = {
@@ -129,9 +131,9 @@ export class WebGPURenderer {
       addressModeV: 'clamp-to-edge',
     });
 
-    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, padding)
+    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace)
     this.uniformBuffer = this.device.createBuffer({
-      size: 16, // 4 floats * 4 bytes = 16 bytes
+      size: 20, // 5 floats * 4 bytes = 20 bytes (will be aligned to 16-byte boundary)
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -139,42 +141,60 @@ export class WebGPURenderer {
   }
 
   /**
-   * Get preferred color space for canvas configuration
+   * Map ColorSpace to canvas color space
    *
-   * @param hdrMode - true for HDR rendering, false for SDR
+   * @param renderState - Render options containing colorSpace and hdrMode
    *
-   * HDR mode: Returns linear color spaces (srgb-linear) for linear RGB output
-   * SDR mode: Returns standard color spaces (srgb) for gamma-encoded output
+   * HDR mode:
+   * - Use -linear colorSpace (srgb-linear, display-p3-linear, rec2020-linear)
+   * - Browser does matrix transform (BT.709 → target) + PQ encoding
+   * - Shader outputs linear BT.709 values directly
    *
-   * Future: Could return rec2020/display-p3 for PQ/HLG emulation modes
+   * SDR mode:
+   * - Use standard colorSpace (srgb, display-p3, rec2020)
+   * - Shader does matrix transform + gamma encoding
    */
-  private getPreferredColorSpace(hdrMode: boolean): 'srgb' | 'srgb-linear' | 'display-p3' | 'rec2020' {
+  private getCanvasColorSpace(renderState: WebGPURenderOptions): 'srgb' | 'srgb-linear' | 'display-p3' | 'display-p3-linear' | 'rec2020' {
+    const { colorSpace, hdrMode } = renderState;
+
     if (hdrMode) {
-      // HDR mode: Use linear color space
-      // Browser will apply PQ encoding automatically with toneMapping: extended
-      return 'srgb-linear';
+      // HDR mode: Use linear colorSpace - browser handles matrix + PQ
+      if (colorSpace === 'display-p3') {
+        return 'display-p3-linear';
+      } else if (colorSpace === 'rec2020') {
+        // Note: rec2020-linear may not be widely supported yet
+        return 'srgb-linear'; // Fallback to srgb-linear for now
+      } else {
+        return 'srgb-linear';
+      }
     } else {
-      // SDR mode: Use standard sRGB
-      // We'll apply sRGB encoding in shader
-      return 'srgb';
+      // SDR mode: Use standard colorSpace - shader handles matrix + gamma
+      if (colorSpace === 'display-p3') {
+        return 'display-p3';
+      } else if (colorSpace === 'rec2020') {
+        return 'rec2020';
+      } else {
+        return 'srgb';
+      }
     }
   }
 
   /**
-   * Reconfigure canvas color space when HDR mode changes
+   * Reconfigure canvas when HDR mode or color space changes
    */
-  private reconfigureCanvas(hdrMode: boolean): void {
-    const colorSpace = this.getPreferredColorSpace(hdrMode);
+  private reconfigureCanvas(renderState: WebGPURenderOptions): void {
+    const canvasColorSpace = this.getCanvasColorSpace(renderState);
     const preferredFormat = navigator.gpu.getPreferredCanvasFormat();
 
-    console.log('[WebGPURenderer] Reconfiguring canvas for', hdrMode ? 'HDR' : 'SDR');
-    console.log('  - Color space:', colorSpace);
+    console.log('[WebGPURenderer] Reconfiguring canvas for', renderState.hdrMode ? 'HDR' : 'SDR');
+    console.log('  - User color space:', renderState.colorSpace);
+    console.log('  - Canvas color space:', canvasColorSpace);
 
     const config: GPUCanvasConfiguration = {
       device: this.device,
       format: this.supportsHDR ? 'rgba16float' : preferredFormat,
       alphaMode: 'opaque',
-      colorSpace: colorSpace as PredefinedColorSpace,
+      colorSpace: canvasColorSpace as PredefinedColorSpace,
     };
 
     if (this.supportsHDR) {
@@ -340,10 +360,11 @@ export class WebGPURenderer {
    * Render with current settings
    */
   render(options: WebGPURenderOptions): void {
-    // Reconfigure canvas if HDR mode changed
-    if (options.hdrMode !== this.currentHDRMode) {
-      this.reconfigureCanvas(options.hdrMode);
+    // Reconfigure canvas if HDR mode or color space changed
+    if (options.hdrMode !== this.currentHDRMode || options.colorSpace !== this.currentColorSpace) {
+      this.reconfigureCanvas(options);
       this.currentHDRMode = options.hdrMode;
+      this.currentColorSpace = options.colorSpace;
     }
 
     // Update uniforms
@@ -352,6 +373,7 @@ export class WebGPURenderer {
       this.getToneMappingIndex(options.toneMapping),
       this.getVisualizationModeIndex(options.visualizationMode),
       options.hdrMode ? 1.0 : 0.0,
+      this.getColorSpaceIndex(options.colorSpace),
     ]);
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms.buffer);
 
@@ -396,6 +418,15 @@ export class WebGPURenderer {
       case 'rgb': return 0;
       case 'luminance': return 1;
       case 'clipping': return 2;
+      default: return 0;
+    }
+  }
+
+  private getColorSpaceIndex(colorSpace: ColorSpace): number {
+    switch (colorSpace) {
+      case 'srgb': return 0;
+      case 'display-p3': return 1;
+      case 'rec2020': return 2;
       default: return 0;
     }
   }

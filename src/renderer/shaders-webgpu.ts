@@ -49,12 +49,30 @@ struct Uniforms {
   toneMapping: f32,      // 0=none, 1=reinhard, 2=aces
   visualizationMode: f32, // 0=rgb, 1=luminance, 2=clipping
   hdrMode: f32,           // 0=sRGB output, 1=PQ output
+  colorSpace: f32,        // 0=srgb, 1=display-p3, 2=rec2020
 };
 
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
 
 // BT.709 luminance weights
 const BT709_WEIGHTS = vec3<f32>(0.2126, 0.7152, 0.0722);
+
+// === Color Space Conversion Matrices ===
+
+// BT.709 (sRGB primaries) to Display P3 (linear to linear)
+// Source: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
+const MAT_BT709_TO_P3 = mat3x3<f32>(
+  vec3<f32>(0.82246197, 0.17753803, 0.00000000),
+  vec3<f32>(0.03319420, 0.96680580, 0.00000000),
+  vec3<f32>(0.01708263, 0.07239744, 0.91051993)
+);
+
+// BT.709 to BT.2020 (linear to linear)
+const MAT_BT709_TO_BT2020 = mat3x3<f32>(
+  vec3<f32>(0.627404, 0.329283, 0.043313),
+  vec3<f32>(0.069097, 0.919541, 0.011362),
+  vec3<f32>(0.016391, 0.088013, 0.895595)
+);
 
 // === Utility Functions ===
 
@@ -64,6 +82,21 @@ fn luminance(rgb: vec3<f32>) -> f32 {
 
 fn applyExposure(rgb: vec3<f32>, ev: f32) -> vec3<f32> {
   return rgb * pow(2.0, ev);
+}
+
+// Apply color space transformation from BT.709 to target color space
+fn applyColorSpaceTransform(rgb: vec3<f32>, colorSpace: i32) -> vec3<f32> {
+  if (colorSpace == 1) {
+    // Display P3
+    return rgb;
+    return MAT_BT709_TO_P3 * rgb;
+  } else if (colorSpace == 2) {
+    // BT.2020
+    return MAT_BT709_TO_BT2020 * rgb;
+  } else {
+    // sRGB (BT.709) - no transform
+    return rgb;
+  }
 }
 
 // === Tone Mapping Operators ===
@@ -167,38 +200,38 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
   var color: vec3<f32>;
   let vizMode = i32(uniforms.visualizationMode);
+  let colorSpace = i32(uniforms.colorSpace);
 
-  // In HDR mode, output linear values directly (browser applies PQ automatically)
+  // In HDR mode, output linear values directly (browser handles matrix + PQ)
   if (uniforms.hdrMode > 0.5) {
-    // HDR mode: Browser applies PQ encoding automatically when toneMapping: extended
-    // Just output linear scene-referred RGB values
+    // HDR mode: Output linear BT.709 values
+    // Browser will do:
+    // 1. Matrix transform (BT.709 → target colorSpace) if using -linear colorSpace
+    // 2. PQ encoding (with toneMapping: extended)
 
     if (vizMode == 1) {
       // False-color luminance (for visualization, apply tone mapping first)
       let tonemapped = toneMappingReinhard(rgb);
       let lum = luminance(tonemapped);
       color = turboColormap(lum);
-      // For false-color, output in sRGB (not linear)
+      // Apply sRGB gamma for false-color visualization
       color = linearToSRGB(color);
     } else if (vizMode == 2) {
       // Clipping visualization
-      // Check if any channel > some threshold (e.g., 10.0 = very bright)
       let clipped = any(rgb > vec3<f32>(10.0));
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        // Output linear RGB directly
+        // Output linear RGB (browser handles rest)
         color = rgb;
       }
     } else {
-      // RGB mode: Output linear values directly
-      // Browser will apply PQ encoding automatically
-      // Scale to match expected brightness (adjust multiplier as needed)
-      // Try values between 1.0 (current) and 2.5 (brighter midtones)
+      // RGB mode: Output linear BT.709 values
+      // Browser handles matrix transform + PQ encoding
       color = rgb;
     }
   } else {
-    // SDR mode: Apply tone mapping
+    // SDR mode: Apply tone mapping, color space transform, and gamma encoding
     let op = i32(uniforms.toneMapping);
     var tonemapped = applyToneMapping(rgb, op);
 
@@ -219,7 +252,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       color = tonemapped;
     }
 
-    // Apply sRGB encoding for SDR display
+    // Apply color space transformation (BT.709 → target)
+    color = applyColorSpaceTransform(color, colorSpace);
+
+    // Apply gamma encoding (sRGB gamma curve)
+    // Note: P3 and BT.2020 use same gamma as sRGB
     color = linearToSRGB(color);
   }
 
