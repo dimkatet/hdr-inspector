@@ -145,37 +145,30 @@ export class WebGPURenderer {
    *
    * @param renderState - Render options containing colorSpace and hdrMode
    *
+   * Both HDR and SDR modes use standard (non-linear) color spaces:
+   * - 'srgb', 'display-p3', 'rec2020'
+   * - Linear variants ('srgb-linear', 'display-p3-linear') are experimental
+   *   and not widely supported, so we use standard color spaces everywhere
+   *
    * HDR mode:
-   * - Use -linear colorSpace (srgb-linear, display-p3-linear, rec2020-linear)
-   * - Browser does matrix transform (BT.709 → target) + PQ encoding
-   * - Shader outputs linear BT.709 values directly
+   * - Shader applies color space transform + sRGB transfer function
+   * - Values > 1.0 are preserved in rgba16float buffer
+   * - toneMapping: extended mode passes HDR values to display
    *
    * SDR mode:
-   * - Use standard colorSpace (srgb, display-p3, rec2020)
-   * - Shader does matrix transform + gamma encoding
+   * - Shader applies tone mapping + color space transform + sRGB transfer function
+   * - Values clamped to [0, 1] for bgra8unorm buffer
    */
-  private getCanvasColorSpace(renderState: WebGPURenderOptions): 'srgb' | 'srgb-linear' | 'display-p3' | 'display-p3-linear' | 'rec2020' {
-    const { colorSpace, hdrMode } = renderState;
+  private getCanvasColorSpace(renderState: WebGPURenderOptions): 'srgb' | 'display-p3' | 'rec2020' {
+    const { colorSpace } = renderState;
 
-    if (hdrMode) {
-      // HDR mode: Use linear colorSpace - browser handles matrix + PQ
-      if (colorSpace === 'display-p3') {
-        return 'display-p3-linear';
-      } else if (colorSpace === 'rec2020') {
-        // Note: rec2020-linear may not be widely supported yet
-        return 'srgb-linear'; // Fallback to srgb-linear for now
-      } else {
-        return 'srgb-linear';
-      }
+    // Use standard (non-linear) color spaces for both HDR and SDR
+    if (colorSpace === 'display-p3') {
+      return 'display-p3';
+    } else if (colorSpace === 'rec2020') {
+      return 'rec2020';
     } else {
-      // SDR mode: Use standard colorSpace - shader handles matrix + gamma
-      if (colorSpace === 'display-p3') {
-        return 'display-p3';
-      } else if (colorSpace === 'rec2020') {
-        return 'rec2020';
-      } else {
-        return 'srgb';
-      }
+      return 'srgb';
     }
   }
 

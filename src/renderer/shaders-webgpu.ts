@@ -88,7 +88,6 @@ fn applyExposure(rgb: vec3<f32>, ev: f32) -> vec3<f32> {
 fn applyColorSpaceTransform(rgb: vec3<f32>, colorSpace: i32) -> vec3<f32> {
   if (colorSpace == 1) {
     // Display P3
-    return rgb;
     return MAT_BT709_TO_P3 * rgb;
   } else if (colorSpace == 2) {
     // BT.2020
@@ -202,12 +201,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   let vizMode = i32(uniforms.visualizationMode);
   let colorSpace = i32(uniforms.colorSpace);
 
-  // In HDR mode, output linear values directly (browser handles matrix + PQ)
+  // HDR mode: Use standard (non-linear) color spaces with explicit encoding
   if (uniforms.hdrMode > 0.5) {
-    // HDR mode: Output linear BT.709 values
-    // Browser will do:
-    // 1. Matrix transform (BT.709 → target colorSpace) if using -linear colorSpace
-    // 2. PQ encoding (with toneMapping: extended)
+    // HDR mode pipeline:
+    // 1. Apply exposure (can produce values > 1.0)
+    // 2. Transform color space (BT.709 → target gamut)
+    // 3. Apply transfer function (sRGB EOTF⁻¹)
+    // 4. Output to rgba16float with toneMapping: extended
+    //
+    // Note: We use standard 'srgb'/'display-p3' (non-linear) because
+    // '-linear' variants are experimental. The sRGB transfer function
+    // doesn't clamp values > 1.0, which are preserved in float buffer
+    // and passed to HDR display via extended tone mapping mode.
 
     if (vizMode == 1) {
       // False-color luminance (for visualization, apply tone mapping first)
@@ -222,13 +227,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        // Output linear RGB (browser handles rest)
-        color = rgb;
+        color = linearToSRGB(color);
       }
     } else {
-      // RGB mode: Output linear BT.709 values
-      // Browser handles matrix transform + PQ encoding
-      color = rgb;
+      // RGB mode: Apply color space transform + encoding
+      color = linearToSRGB(rgb);
     }
   } else {
     // SDR mode: Apply tone mapping, color space transform, and gamma encoding
@@ -251,9 +254,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       // RGB mode
       color = tonemapped;
     }
-
-    // Apply color space transformation (BT.709 → target)
-    color = applyColorSpaceTransform(color, colorSpace);
 
     // Apply gamma encoding (sRGB gamma curve)
     // Note: P3 and BT.2020 use same gamma as sRGB
