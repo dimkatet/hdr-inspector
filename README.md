@@ -132,7 +132,6 @@ npm publish --access public
 ## 📝 Documentation
 
 - [Library README](./packages/hdr-canvas/README.md) - Full API documentation
-- [CLAUDE.md](./CLAUDE.md) - Development guidelines and architecture
 
 ## 🔧 Tech Stack
 
