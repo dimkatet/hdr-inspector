@@ -4,7 +4,12 @@
  * UI controls for exposure, tone mapping, and visualization modes.
  */
 
-import type { RenderState, ToneMappingOperator, VisualizationMode, ColorSpace } from '../types';
+import type {
+  RenderState,
+  ToneMappingOperator,
+  VisualizationMode,
+  ColorSpace
+} from '@dimkatet/hdr-canvas'
 
 interface ControlsProps {
   renderState: RenderState;
@@ -22,7 +27,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
   };
 
   const handleVisualizationModeChange = (mode: VisualizationMode) => {
-    onRenderStateChange({ ...renderState, mode });
+    onRenderStateChange({ ...renderState, visualizationMode: mode });
   };
 
   const handleHdrModeChange = (enabled: boolean) => {
@@ -96,7 +101,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
               onClick={() => handleVisualizationModeChange(mode)}
               style={{
                 padding: '8px 16px',
-                backgroundColor: renderState.mode === mode ? '#4a9eff' : '#333',
+                backgroundColor: renderState.visualizationMode === mode ? '#4a9eff' : '#333',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',

@@ -1,0 +1,17 @@
+// Core exports for vanilla JS API
+
+export { HDRCanvas } from './HDRCanvas'
+export { decodeRadianceHDR, DecodeError } from './decoders'
+export {
+  detectHDRCapabilities,
+  getCapabilitiesDescription,
+  type HDRCapabilities
+} from './core'
+export type {
+  HDRCanvasOptions,
+  RenderState,
+  LinearImageData,
+  ToneMappingOperator,
+  VisualizationMode,
+  ColorSpace
+} from './types'

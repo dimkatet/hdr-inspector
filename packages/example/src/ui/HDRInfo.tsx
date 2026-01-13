@@ -4,8 +4,12 @@
  * Displays detected HDR capabilities of the browser and display.
  */
 
-import { useState, useEffect } from 'react';
-import { detectHDRCapabilities, getCapabilitiesDescription, type HDRCapabilities } from '../core/hdr-capabilities';
+import { useState, useEffect } from 'react'
+import {
+  detectHDRCapabilities,
+  getCapabilitiesDescription,
+  type HDRCapabilities
+} from '@dimkatet/hdr-canvas'
 
 export function HDRInfo() {
   const [capabilities, setCapabilities] = useState<HDRCapabilities | null>(null);

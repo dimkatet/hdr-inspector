@@ -35,8 +35,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build
-        run: pnpm build
+      - name: Build library
+        run: pnpm --filter @dimkatet/hdr-canvas build
+
+      - name: Build demo app
+        run: pnpm --filter hdr-inspector-demo build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -44,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: './packages/example/dist'
 
   deploy:
     environment:
