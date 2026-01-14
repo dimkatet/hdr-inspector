@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 import { HDRCanvas as VanillaHDRCanvas } from '../HDRCanvas'
 import type { HDRCanvasOptions, LinearImageData } from '../types'
 
-export interface HDRCanvasProps extends HDRCanvasOptions {
+export interface HDRImageProps extends HDRCanvasOptions {
   image?: LinearImageData | File
   onLoad?: () => void
   onError?: (error: Error) => void
@@ -13,14 +13,14 @@ export interface HDRCanvasProps extends HDRCanvasOptions {
   style?: React.CSSProperties
 }
 
-export function HDRCanvas({
+export function HDRImage({
   image,
   onLoad,
   onError,
   className,
   style,
   ...options
-}: HDRCanvasProps) {
+}: HDRImageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const instanceRef = useRef<VanillaHDRCanvas | null>(null)
 

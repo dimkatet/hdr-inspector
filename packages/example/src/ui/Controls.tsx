@@ -9,7 +9,7 @@ import type {
   ToneMappingOperator,
   VisualizationMode,
   ColorSpace
-} from '@dimkatet/hdr-canvas'
+} from '@dimkatet/hdr-image-renderer'
 
 interface ControlsProps {
   renderState: RenderState;

@@ -2,6 +2,7 @@
   "name": "hdr-inspector",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.0.0",
   "type": "module",
   "scripts": {
     "dev": "turbo run dev",
@@ -9,7 +10,7 @@
     "lint": "turbo run lint",
     "clean": "turbo run clean",
     "dev:example": "pnpm --filter hdr-inspector-demo dev",
-    "build:lib": "pnpm --filter @dimkatet/hdr-canvas build",
+    "build:lib": "pnpm --filter @dimkatet/hdr-image-renderer build",
     "deploy": "./scripts/deploy.sh"
   },
   "dependencies": {},

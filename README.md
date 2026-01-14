@@ -4,7 +4,7 @@ WebGPU-based HDR image viewer with native HDR display support.
 
 ## 📦 Packages
 
-### [@dimkatet/hdr-canvas](./packages/hdr-canvas)
+### [@dimkatet/hdr-image-renderer](./packages/hdr-image-renderer)
 NPM package for HDR image rendering with WebGPU.
 - Zero dependencies (except React as optional peer)
 - Tree-shakeable ESM exports
@@ -12,7 +12,7 @@ NPM package for HDR image rendering with WebGPU.
 - 26KB bundle size
 
 ### [hdr-inspector-demo](./packages/example)
-Example application demonstrating `@dimkatet/hdr-canvas` usage.
+Example application demonstrating `@dimkatet/hdr-image-renderer` usage.
 - React + Vite
 - Full HDR workflow example
 - UI components for controls
@@ -65,7 +65,7 @@ pnpm dev:example
 ### Working on the Library
 
 ```bash
-cd packages/hdr-canvas
+cd packages/hdr-image-renderer
 
 # Watch mode (rebuild on changes)
 pnpm dev
@@ -83,7 +83,7 @@ pnpm clean
 ### Publishing to NPM
 
 ```bash
-cd packages/hdr-canvas
+cd packages/hdr-image-renderer
 
 # Bump version
 npm version patch  # or minor, major
@@ -97,7 +97,7 @@ npm publish --access public
 ```
 .
 ├── packages/
-│   ├── hdr-canvas/          # NPM library package
+│   ├── hdr-image-renderer/          # NPM library package
 │   │   ├── src/
 │   │   │   ├── index.ts              # Main exports
 │   │   │   ├── HDRCanvas.ts          # Core API
@@ -131,7 +131,7 @@ npm publish --access public
 
 ## 📝 Documentation
 
-- [Library README](./packages/hdr-canvas/README.md) - Full API documentation
+- [Library README](./packages/hdr-image-renderer/README.md) - Full API documentation
 
 ## 🔧 Tech Stack
 

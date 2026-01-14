@@ -9,7 +9,7 @@ import {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   type HDRCapabilities
-} from '@dimkatet/hdr-canvas'
+} from '@dimkatet/hdr-image-renderer'
 
 export function HDRInfo() {
   const [capabilities, setCapabilities] = useState<HDRCapabilities | null>(null);

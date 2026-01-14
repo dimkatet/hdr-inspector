@@ -1,12 +1,12 @@
 /**
  * HDR Inspector - Example App
  *
- * Demonstrates usage of @dimkatet/hdr-canvas package
+ * Demonstrates usage of @dimkatet/hdr-image-renderer package
  */
 
 import { useState, useEffect } from 'react'
-import type { LinearImageData, RenderState } from '@dimkatet/hdr-canvas'
-import { decodeRadianceHDR, detectHDRCapabilities } from '@dimkatet/hdr-canvas'
+import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer'
+import { decodeRadianceHDR, detectHDRCapabilities } from '@dimkatet/hdr-image-renderer'
 import { FileDrop } from './FileDrop'
 import { ImageCanvas } from './ImageCanvas'
 import { Controls } from './Controls'
@@ -62,7 +62,7 @@ function App() {
       >
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
         <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#888' }}>
-          Scene-referred linear HDR image viewer (powered by @dimkatet/hdr-canvas)
+          Scene-referred linear HDR image viewer (powered by @dimkatet/hdr-image-renderer)
         </p>
       </header>
 

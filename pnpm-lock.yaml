@@ -56,9 +56,9 @@ importers:
 
   packages/example:
     dependencies:
-      '@dimkatet/hdr-canvas':
+      '@dimkatet/hdr-image-renderer':
         specifier: workspace:*
-        version: link:../hdr-canvas
+        version: link:../hdr-image-renderer
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -103,7 +103,7 @@ importers:
         specifier: npm:rolldown-vite@7.2.5
         version: rolldown-vite@7.2.5(@types/node@24.10.4)
 
-  packages/hdr-canvas:
+  packages/hdr-image-renderer:
     devDependencies:
       '@types/react':
         specifier: ^19.2.5

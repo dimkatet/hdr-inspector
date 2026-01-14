@@ -1,12 +1,12 @@
 /**
  * Image Canvas Component
  *
- * Demonstrates usage of @dimkatet/hdr-canvas React component
+ * Demonstrates usage of @dimkatet/hdr-image-renderer React component
  */
 
 import { useState } from 'react'
-import type { LinearImageData, RenderState } from '@dimkatet/hdr-canvas'
-import { HDRCanvas } from '@dimkatet/hdr-canvas/react'
+import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer'
+import { HDRImage } from '@dimkatet/hdr-image-renderer/react'
 
 interface ImageCanvasProps {
   image: LinearImageData | null
@@ -47,7 +47,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   }
 
   return (
-    <HDRCanvas
+    <HDRImage
       image={image ?? undefined}
       exposure={renderState.exposure}
       toneMapping={renderState.toneMapping}

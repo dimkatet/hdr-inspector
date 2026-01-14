@@ -12,7 +12,7 @@
     "deploy": "../../scripts/deploy.sh"
   },
   "dependencies": {
-    "@dimkatet/hdr-canvas": "workspace:*",
+    "@dimkatet/hdr-image-renderer": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

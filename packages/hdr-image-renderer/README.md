@@ -1,4 +1,4 @@
-# @dimkatet/hdr-canvas
+# @dimkatet/hdr-image-renderer
 
 WebGPU-based HDR image viewer with native HDR display support.
 
@@ -15,11 +15,11 @@ WebGPU-based HDR image viewer with native HDR display support.
 ## Installation
 
 ```bash
-npm install @dimkatet/hdr-canvas
+npm install @dimkatet/hdr-image-renderer
 # or
-pnpm add @dimkatet/hdr-canvas
+pnpm add @dimkatet/hdr-image-renderer
 # or
-yarn add @dimkatet/hdr-canvas
+yarn add @dimkatet/hdr-image-renderer
 ```
 
 ## Browser Requirements
@@ -33,7 +33,7 @@ yarn add @dimkatet/hdr-canvas
 ### Vanilla JavaScript
 
 ```typescript
-import { HDRCanvas } from '@dimkatet/hdr-canvas'
+import { HDRCanvas } from '@dimkatet/hdr-image-renderer'
 
 const canvas = document.querySelector('canvas')
 const hdrCanvas = new HDRCanvas(canvas, {
@@ -63,7 +63,7 @@ hdrCanvas.setHDRMode(false)
 ### React
 
 ```tsx
-import { HDRCanvas } from '@dimkatet/hdr-canvas/react'
+import { HDRImage } from '@dimkatet/hdr-image-renderer/react'
 import { useState } from 'react'
 
 function App() {
@@ -72,7 +72,7 @@ function App() {
 
   return (
     <>
-      <HDRCanvas
+      <HDRImage
         image={file}
         exposure={exposure}
         toneMapping="aces"
@@ -102,7 +102,7 @@ function App() {
 ### Using Decoder Directly
 
 ```typescript
-import { decodeRadianceHDR } from '@dimkatet/hdr-canvas'
+import { decodeRadianceHDR } from '@dimkatet/hdr-image-renderer'
 
 const buffer = await fetch('image.hdr').then(r => r.arrayBuffer())
 const imageData = decodeRadianceHDR(buffer)
@@ -114,7 +114,7 @@ console.log(imageData.data) // Float32Array - linear RGB
 ### Detecting HDR Capabilities
 
 ```typescript
-import { detectHDRCapabilities } from '@dimkatet/hdr-canvas'
+import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer'
 
 const caps = await detectHDRCapabilities()
 console.log('WebGPU supported:', caps.webgpuSupported)
@@ -159,7 +159,7 @@ new HDRCanvas(canvas: HTMLCanvasElement, options?: HDRCanvasOptions)
 ### React Component
 
 ```typescript
-interface HDRCanvasProps extends HDRCanvasOptions {
+interface HDRImageProps extends HDRCanvasOptions {
   image?: LinearImageData | File
   onLoad?: () => void
   onError?: (error: Error) => void

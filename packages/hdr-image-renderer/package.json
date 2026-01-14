@@ -1,5 +1,5 @@
 {
-  "name": "@dimkatet/hdr-canvas",
+  "name": "@dimkatet/hdr-image-renderer",
   "version": "0.1.0",
   "description": "WebGPU-based HDR image viewer with native HDR display support",
   "type": "module",
