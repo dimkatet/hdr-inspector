@@ -21,3 +21,4 @@ export {
 } from './hdr-capabilities'
 
 export { ViewportController } from './ViewportController'
+export { InteractionHandler, type InteractionCallbacks } from './InteractionHandler'

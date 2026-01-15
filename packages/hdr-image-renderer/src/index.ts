@@ -6,7 +6,9 @@ export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   ViewportController,
-  type HDRCapabilities
+  InteractionHandler,
+  type HDRCapabilities,
+  type InteractionCallbacks
 } from './core'
 export type {
   HDRCanvasOptions,

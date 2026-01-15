@@ -9,6 +9,7 @@ import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState, Vie
 import { decodeRadianceHDR } from './decoders'
 import { WebGPURenderer } from './renderer'
 import { ViewportController } from './core/ViewportController'
+import { InteractionHandler } from './core/InteractionHandler'
 
 export class HDRCanvas {
   private canvas: HTMLCanvasElement
@@ -244,66 +245,24 @@ export class HDRCanvas {
     // Set up viewport change callback
     const originalCallback = this.viewportController['onUpdate']
     this.viewportController.setUpdateCallback((state) => {
-      this.render()
+      this.renderWithViewport(state)
       onViewportChange?.(state)
     })
 
-    // Wheel zoom handler
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault()
-      const rect = this.canvas.getBoundingClientRect()
-      const cursorX = (e.clientX - rect.left) / rect.width
-      const cursorY = (e.clientY - rect.top) / rect.height
-      this.viewportController.applyWheelZoom(e.deltaY, cursorX, cursorY)
-    }
+    // Create interaction handler
+    const handler = new InteractionHandler(this.canvas, {
+      onWheelZoom: (deltaY, cursorX, cursorY) =>
+        this.viewportController.applyWheelZoom(deltaY, cursorX, cursorY),
+      onDragPan: (deltaX, deltaY) =>
+        this.viewportController.applyDragPan(deltaX, deltaY),
+      onReset: () => this.viewportController.resetAnimated(),
+    });
 
-    // Drag state
-    let isDragging = false
-    let lastPos = { x: 0, y: 0 }
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging) return
-      const rect = this.canvas.getBoundingClientRect()
-      const deltaX = (e.clientX - lastPos.x) / rect.width
-      const deltaY = (e.clientY - lastPos.y) / rect.height
-      lastPos = { x: e.clientX, y: e.clientY }
-      this.viewportController.applyDragPan(deltaX, deltaY)
-    }
-
-    const handleMouseUp = () => {
-      isDragging = false
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    const handleMouseDown = (e: MouseEvent) => {
-      if (e.button !== 0) return // Left click only
-      e.preventDefault()
-      isDragging = true
-      lastPos = { x: e.clientX, y: e.clientY }
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-    }
-
-    // Double-click to reset
-    const handleDblClick = (e: MouseEvent) => {
-      e.preventDefault()
-      this.viewportController.resetAnimated()
-    }
-
-    // Attach listeners
-    this.canvas.addEventListener('wheel', handleWheel, { passive: false })
-    this.canvas.addEventListener('mousedown', handleMouseDown)
-    this.canvas.addEventListener('dblclick', handleDblClick)
+    const detach = handler.attach()
 
     // Return cleanup function
     return () => {
-      this.canvas.removeEventListener('wheel', handleWheel)
-      this.canvas.removeEventListener('mousedown', handleMouseDown)
-      this.canvas.removeEventListener('dblclick', handleDblClick)
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      // Restore original callback
+      detach()
       this.viewportController.setUpdateCallback(originalCallback)
     }
   }
@@ -363,13 +322,22 @@ export class HDRCanvas {
   private render(): void {
     if (!this.initialized) return
 
+    this.renderWithViewport(this.viewportController.getState())
+  }
+
+  /**
+   * Render with explicit viewport state (avoids extra getState() call)
+   */
+  private renderWithViewport(viewport: ViewportState): void {
+    if (!this.initialized) return
+
     this.renderer.render({
       exposure: this.options.exposure,
       toneMapping: this.options.toneMapping,
       visualizationMode: this.options.visualizationMode,
       hdrMode: this.options.hdrMode,
       colorSpace: this.options.colorSpace,
-      viewport: this.viewportController.getState()
+      viewport
     })
   }
 
