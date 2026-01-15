@@ -5,7 +5,7 @@
  * Supports native HDR output via PQ encoding when available.
  */
 
-import type { LinearImageData, ColorSpace } from '../types'
+import type { LinearImageData, ColorSpace, ViewportState } from '../types'
 import { vertexShaderWGSL, fragmentShaderWGSL } from './shaders'
 
 export interface WebGPURenderOptions {
@@ -14,6 +14,11 @@ export interface WebGPURenderOptions {
   visualizationMode: 'rgb' | 'luminance' | 'clipping'
   hdrMode: boolean // true = PQ output, false = sRGB output
   colorSpace: ColorSpace // Color space for output
+  viewport: ViewportState // Zoom and pan state
+}
+
+export interface WebGPURendererOptions {
+  transparent?: boolean
 }
 
 export class WebGPURenderer {
@@ -28,9 +33,13 @@ export class WebGPURenderer {
   private supportsHDR: boolean = false
   private currentHDRMode: boolean = false
   private currentColorSpace: ColorSpace = 'srgb'
+  private imageWidth: number = 1
+  private imageHeight: number = 1
+  private transparent: boolean = false
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, options: WebGPURendererOptions = {}) {
     this.canvas = canvas
+    this.transparent = options.transparent ?? false
   }
 
   /**
@@ -80,7 +89,7 @@ export class WebGPURenderer {
       const config: GPUCanvasConfiguration = {
         device: this.device,
         format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-        alphaMode: 'opaque',
+        alphaMode: this.transparent ? 'premultiplied' : 'opaque',
         colorSpace: preferredColorSpace as PredefinedColorSpace
       }
 
@@ -107,7 +116,7 @@ export class WebGPURenderer {
       const config: GPUCanvasConfiguration = {
         device: this.device,
         format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-        alphaMode: 'opaque',
+        alphaMode: this.transparent ? 'premultiplied' : 'opaque',
         colorSpace: fallback as PredefinedColorSpace
       }
 
@@ -131,9 +140,9 @@ export class WebGPURenderer {
       addressModeV: 'clamp-to-edge'
     })
 
-    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace)
+    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace, zoom, panX, panY, imageAspect, canvasAspect, transparent)
     this.uniformBuffer = this.device.createBuffer({
-      size: 20, // 5 floats * 4 bytes = 20 bytes (will be aligned to 16-byte boundary)
+      size: 44, // 11 floats * 4 bytes = 44 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
     })
 
@@ -188,7 +197,7 @@ export class WebGPURenderer {
     const config: GPUCanvasConfiguration = {
       device: this.device,
       format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-      alphaMode: 'opaque',
+      alphaMode: this.transparent ? 'premultiplied' : 'opaque',
       colorSpace: canvasColorSpace as PredefinedColorSpace
     }
 
@@ -233,9 +242,9 @@ export class WebGPURenderer {
   uploadImage(image: LinearImageData): void {
     console.log('[WebGPURenderer] Uploading image:', image.width, 'x', image.height)
 
-    // Update canvas size to match image
-    this.canvas.width = image.width
-    this.canvas.height = image.height
+    // Store image dimensions for aspect ratio calculation
+    this.imageWidth = image.width
+    this.imageHeight = image.height
 
     console.log('[WebGPURenderer] Canvas size:', this.canvas.width, 'x', this.canvas.height)
 
@@ -363,12 +372,21 @@ export class WebGPURenderer {
     }
 
     // Update uniforms
+    const imageAspect = this.imageWidth / this.imageHeight
+    const canvasAspect = this.canvas.width / this.canvas.height
+
     const uniforms = new Float32Array([
       options.exposure,
       this.getToneMappingIndex(options.toneMapping),
       this.getVisualizationModeIndex(options.visualizationMode),
       options.hdrMode ? 1.0 : 0.0,
-      this.getColorSpaceIndex(options.colorSpace)
+      this.getColorSpaceIndex(options.colorSpace),
+      options.viewport.zoom,
+      options.viewport.panX,
+      options.viewport.panY,
+      imageAspect,
+      canvasAspect,
+      this.transparent ? 1.0 : 0.0
     ])
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms.buffer)
 
@@ -384,7 +402,7 @@ export class WebGPURenderer {
         {
           view: textureView,
           loadOp: 'clear',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
           storeOp: 'store'
         }
       ]
@@ -436,6 +454,13 @@ export class WebGPURenderer {
       default:
         return 0
     }
+  }
+
+  /**
+   * Get loaded image dimensions
+   */
+  getImageDimensions(): { width: number; height: number } {
+    return { width: this.imageWidth, height: this.imageHeight }
   }
 
   /**

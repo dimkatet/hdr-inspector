@@ -1,88 +1,91 @@
 // React component wrapper
-// Will be a thin wrapper around HDRCanvas class
+// Thin wrapper around HDRCanvas class with composable hooks
 
-import { useEffect, useRef } from 'react'
-import { HDRCanvas as VanillaHDRCanvas } from '../HDRCanvas'
-import type { HDRCanvasOptions, LinearImageData } from '../types'
+import { useState, useCallback } from "react";
+import type { HDRCanvasOptions, LinearImageData } from "../types";
+import {
+  useHDRCanvas,
+  useImageLoader,
+  useRenderOptions,
+  useViewport,
+  type UseViewportOptions,
+  type ImageInfo,
+} from "./hooks";
 
-export interface HDRImageProps extends HDRCanvasOptions {
-  image?: LinearImageData | File
-  onLoad?: () => void
-  onError?: (error: Error) => void
-  className?: string
-  style?: React.CSSProperties
+export interface HDRImageProps
+  extends Omit<
+    React.CanvasHTMLAttributes<HTMLCanvasElement>,
+    "onLoad" | "onError"
+  > {
+  /** Image data or file to display */
+  image?: LinearImageData | File;
+  /** Render options (exposure, toneMapping, etc.) */
+  options: HDRCanvasOptions;
+  /** Callback when image loads successfully with image info */
+  onLoad?: (info: ImageInfo) => void;
+  /** Callback when an error occurs */
+  onError?: (error: Error) => void;
+  /** Enable zoom/pan interactions */
+  zoomable?: boolean | UseViewportOptions;
+  /** Auto-adjust canvas aspect ratio to match loaded image */
+  fitToImage?: boolean;
 }
 
 export function HDRImage({
   image,
+  options,
   onLoad,
   onError,
+  zoomable = false,
+  fitToImage = false,
   className,
   style,
-  ...options
+  ...rest
 }: HDRImageProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const instanceRef = useRef<VanillaHDRCanvas | null>(null)
+  const [aspectRatio, setAspectRatio] = useState<number | undefined>();
 
-  // Initialize canvas instance
-  useEffect(() => {
-    if (!canvasRef.current) return
+  // Initialize HDRCanvas instance
+  const { canvasRef, instanceRef } = useHDRCanvas(options, onError);
 
-    try {
-      instanceRef.current = new VanillaHDRCanvas(canvasRef.current, options)
-    } catch (error) {
-      onError?.(error as Error)
-    }
-
-    return () => {
-      instanceRef.current?.destroy()
-      instanceRef.current = null
-    }
-  }, []) // Only on mount
+  // Handle image load with aspect ratio extraction
+  const handleLoad = useCallback(
+    (info: ImageInfo) => {
+      if (fitToImage) {
+        setAspectRatio(info.aspectRatio);
+      }
+      onLoad?.(info);
+    },
+    [fitToImage, onLoad]
+  );
 
   // Load image when it changes
-  useEffect(() => {
-    if (!image || !instanceRef.current) return
+  useImageLoader(instanceRef, image, { onLoad: handleLoad, onError });
 
-    const loadPromise =
-      image instanceof File
-        ? instanceRef.current.loadFile(image)
-        : instanceRef.current.loadImage(image as LinearImageData)
+  // Sync render options
+  useRenderOptions(instanceRef, options);
 
-    loadPromise
-      .then(() => onLoad?.())
-      .catch((error) => onError?.(error))
-  }, [image, onLoad, onError])
+  // Setup zoom/pan if enabled
+  const viewportOptions: UseViewportOptions =
+    typeof zoomable === "boolean" ? { enabled: zoomable } : zoomable;
 
-  // Update options when they change
-  useEffect(() => {
-    if (!instanceRef.current) return
-    instanceRef.current.setExposure(options.exposure ?? 0)
-  }, [options.exposure])
+  const { handlers } = useViewport(instanceRef, canvasRef, viewportOptions);
 
-  useEffect(() => {
-    if (!instanceRef.current) return
-    instanceRef.current.setToneMapping(options.toneMapping ?? 'aces')
-  }, [options.toneMapping])
+  // Build canvas style
+  const canvasStyle: React.CSSProperties = {
+    ...style,
+    cursor: viewportOptions.enabled ? "grab" : undefined,
+    aspectRatio: fitToImage ? aspectRatio : style?.aspectRatio,
+  };
 
-  useEffect(() => {
-    if (!instanceRef.current) return
-    instanceRef.current.setHDRMode(options.hdrMode ?? false)
-  }, [options.hdrMode])
-
-  useEffect(() => {
-    if (!instanceRef.current) return
-    if (options.visualizationMode) {
-      instanceRef.current.setVisualizationMode(options.visualizationMode)
-    }
-  }, [options.visualizationMode])
-
-  useEffect(() => {
-    if (!instanceRef.current) return
-    if (options.colorSpace) {
-      instanceRef.current.setColorSpace(options.colorSpace)
-    }
-  }, [options.colorSpace])
-
-  return <canvas ref={canvasRef} className={className} style={style} />
+  return (
+    <canvas
+      ref={canvasRef}
+      className={className}
+      style={canvasStyle}
+      {...(viewportOptions.enabled ? handlers : {})}
+      {...rest}
+    />
+  );
 }
+
+export { type UseViewportOptions, type UseViewportResult, type ImageInfo } from "./hooks";

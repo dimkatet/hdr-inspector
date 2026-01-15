@@ -13,5 +13,6 @@ export type {
   LinearImageData,
   ToneMappingOperator,
   VisualizationMode,
-  ColorSpace
+  ColorSpace,
+  ViewportState
 } from './types'

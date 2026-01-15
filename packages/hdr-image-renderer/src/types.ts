@@ -56,6 +56,8 @@ export interface HDRCanvasOptions {
   colorSpace?: ColorSpace
   /** Visualization mode */
   visualizationMode?: VisualizationMode
+  /** Enable transparent background */
+  transparent?: boolean
 }
 
 /**
@@ -67,4 +69,16 @@ export interface RenderState {
   visualizationMode: VisualizationMode
   hdrMode: boolean
   colorSpace: ColorSpace
+}
+
+/**
+ * Viewport state for zoom/pan
+ */
+export interface ViewportState {
+  /** Zoom level (1.0 = 100%, 2.0 = 200%, etc.) */
+  zoom: number
+  /** Pan offset X in normalized coordinates [-1, 1] */
+  panX: number
+  /** Pan offset Y in normalized coordinates [-1, 1] */
+  panY: number
 }

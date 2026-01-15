@@ -48,22 +48,22 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
 
   return (
     <HDRImage
+      fitToImage
       image={image ?? undefined}
-      exposure={renderState.exposure}
-      toneMapping={renderState.toneMapping}
-      visualizationMode={renderState.visualizationMode}
-      hdrMode={renderState.hdrMode}
-      colorSpace={renderState.colorSpace}
+      options={{
+        ...renderState,
+        transparent: true,
+      }}
       onLoad={handleLoad}
       onError={handleError}
+      zoomable={{
+        enabled: true,
+        animationSpeed: 0.01,
+      }}
       style={{
-        display: 'block',
-        maxWidth: '100%',
-        maxHeight: '80vh',
-        objectFit: 'contain',
-        backgroundColor: '#000',
-        border: '1px solid #333'
+        display: "block",
+        height: "60vh",
       }}
     />
-  )
+  );
 }

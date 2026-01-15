@@ -50,6 +50,12 @@ struct Uniforms {
   visualizationMode: f32, // 0=rgb, 1=luminance, 2=clipping
   hdrMode: f32,           // 0=sRGB output, 1=PQ output
   colorSpace: f32,        // 0=srgb, 1=display-p3, 2=rec2020
+  zoom: f32,              // Zoom level (1.0 = 100%)
+  panX: f32,              // Pan offset X in normalized coords
+  panY: f32,              // Pan offset Y in normalized coords
+  imageAspect: f32,       // Image width / height
+  canvasAspect: f32,      // Canvas width / height
+  transparent: f32,       // 0=opaque background, 1=transparent
 };
 
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
@@ -189,10 +195,66 @@ fn turboColormap(t_in: f32) -> vec3<f32> {
 
 // === Main Fragment Shader ===
 
+// Apply aspect ratio correction for "contain" fit
+// Returns UV offset and scale to fit image within canvas
+fn getContainTransform(imageAspect: f32, canvasAspect: f32) -> vec4<f32> {
+  // vec4: (scaleX, scaleY, offsetX, offsetY)
+  if (imageAspect > canvasAspect) {
+    // Image is wider than canvas - fit to width, letterbox top/bottom
+    let scale = canvasAspect / imageAspect;
+    return vec4<f32>(1.0, scale, 0.0, (1.0 - scale) / 2.0);
+  } else {
+    // Image is taller than canvas - fit to height, pillarbox left/right
+    let scale = imageAspect / canvasAspect;
+    return vec4<f32>(scale, 1.0, (1.0 - scale) / 2.0, 0.0);
+  }
+}
+
+// Apply zoom and pan to UV coordinates with aspect ratio correction
+fn transformUV(uv: vec2<f32>, zoom: f32, panX: f32, panY: f32, imageAspect: f32, canvasAspect: f32) -> vec2<f32> {
+  // Get contain transform
+  let contain = getContainTransform(imageAspect, canvasAspect);
+  let scaleX = contain.x;
+  let scaleY = contain.y;
+  let offsetX = contain.z;
+  let offsetY = contain.w;
+
+  // Transform canvas UV to image UV (accounting for letterbox/pillarbox)
+  var imageUV = vec2<f32>(
+    (uv.x - offsetX) / scaleX,
+    (uv.y - offsetY) / scaleY
+  );
+
+  // Apply zoom and pan (centered on image)
+  let centered = imageUV - 0.5;
+  let zoomed = centered / zoom;
+  let panned = zoomed + vec2<f32>(panX, panY);
+  return panned + 0.5;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-  // Sample HDR texture (linear scene-referred RGB)
-  var rgb = textureSample(hdrTexture, hdrSampler, in.uv).rgb;
+  // Apply viewport transform (zoom/pan) with aspect ratio correction
+  let transformedUV = transformUV(in.uv, uniforms.zoom, uniforms.panX, uniforms.panY, uniforms.imageAspect, uniforms.canvasAspect);
+
+  // Sample HDR texture first (must be in uniform control flow)
+  // Clamp UV to valid range for sampling
+  let clampedUV = clamp(transformedUV, vec2<f32>(0.0), vec2<f32>(1.0));
+  var rgb = textureSample(hdrTexture, hdrSampler, clampedUV).rgb;
+
+  // Check if UV is outside [0, 1] range
+  let outOfBounds = transformedUV.x < 0.0 || transformedUV.x > 1.0 ||
+                    transformedUV.y < 0.0 || transformedUV.y > 1.0;
+
+  // If transparent mode and out of bounds, return transparent pixel
+  if (outOfBounds && uniforms.transparent > 0.5) {
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+  }
+
+  // For opaque mode, show black for out-of-bounds
+  if (outOfBounds) {
+    rgb = vec3<f32>(0.0, 0.0, 0.0);
+  }
 
   // Apply exposure
   rgb = applyExposure(rgb, uniforms.exposure);
