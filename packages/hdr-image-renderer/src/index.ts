@@ -5,6 +5,7 @@ export { decodeRadianceHDR, DecodeError } from './decoders'
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
+  ViewportController,
   type HDRCapabilities
 } from './core'
 export type {
@@ -14,5 +15,8 @@ export type {
   ToneMappingOperator,
   VisualizationMode,
   ColorSpace,
-  ViewportState
+  ViewportState,
+  ViewportConfig,
+  ImageInfo,
+  InteractionOptions
 } from './types'

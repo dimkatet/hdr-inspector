@@ -58,7 +58,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
       onError={handleError}
       zoomable={{
         enabled: true,
-        animationSpeed: 0.01,
+        animationSpeed: 0.15,
       }}
       style={{
         display: "block",

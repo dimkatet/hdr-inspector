@@ -68,7 +68,7 @@ export function HDRImage({
   const viewportOptions: UseViewportOptions =
     typeof zoomable === "boolean" ? { enabled: zoomable } : zoomable;
 
-  const { handlers } = useViewport(instanceRef, canvasRef, viewportOptions);
+  useViewport(instanceRef, canvasRef, viewportOptions);
 
   // Build canvas style
   const canvasStyle: React.CSSProperties = {
@@ -82,7 +82,6 @@ export function HDRImage({
       ref={canvasRef}
       className={className}
       style={canvasStyle}
-      {...(viewportOptions.enabled ? handlers : {})}
       {...rest}
     />
   );

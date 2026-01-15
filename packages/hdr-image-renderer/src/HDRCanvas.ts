@@ -5,16 +5,18 @@
  * Wraps WebGPURenderer with a simple imperative API.
  */
 
-import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState } from './types'
+import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState, ViewportConfig, ImageInfo, InteractionOptions } from './types'
 import { decodeRadianceHDR } from './decoders'
 import { WebGPURenderer } from './renderer'
+import { ViewportController } from './core/ViewportController'
 
 export class HDRCanvas {
   private canvas: HTMLCanvasElement
   private options: Required<HDRCanvasOptions>
   private renderer: WebGPURenderer
   private initialized: boolean = false
-  private viewport: ViewportState = { zoom: 1, panX: 0, panY: 0 }
+  private viewportController: ViewportController
+  private resizeObserver: ResizeObserver | null = null
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
     this.canvas = canvas
@@ -28,6 +30,8 @@ export class HDRCanvas {
     }
 
     this.renderer = new WebGPURenderer(canvas, { transparent: this.options.transparent })
+    this.viewportController = new ViewportController()
+    this.viewportController.setUpdateCallback(() => this.render())
   }
 
   /**
@@ -132,10 +136,28 @@ export class HDRCanvas {
   }
 
   /**
+   * Batch update render options
+   */
+  updateOptions(options: Partial<HDRCanvasOptions>): void {
+    if (options.exposure !== undefined) this.options.exposure = options.exposure
+    if (options.toneMapping !== undefined) this.options.toneMapping = options.toneMapping
+    if (options.hdrMode !== undefined) this.options.hdrMode = options.hdrMode
+    if (options.colorSpace !== undefined) this.options.colorSpace = options.colorSpace
+    if (options.visualizationMode !== undefined) this.options.visualizationMode = options.visualizationMode
+    if (this.initialized) {
+      this.render()
+    }
+  }
+
+  // ============================================================
+  // Viewport methods
+  // ============================================================
+
+  /**
    * Get current viewport state
    */
   getViewport(): ViewportState {
-    return { ...this.viewport }
+    return this.viewportController.getState()
   }
 
   /**
@@ -143,10 +165,7 @@ export class HDRCanvas {
    * @param zoom Zoom level (1.0 = 100%, 2.0 = 200%)
    */
   setZoom(zoom: number): void {
-    this.viewport.zoom = Math.max(0.1, Math.min(10, zoom))
-    if (this.initialized) {
-      this.render()
-    }
+    this.viewportController.setState({ zoom })
   }
 
   /**
@@ -155,52 +174,202 @@ export class HDRCanvas {
    * @param y Pan Y in normalized coordinates
    */
   setPan(x: number, y: number): void {
-    this.viewport.panX = x
-    this.viewport.panY = y
-    if (this.initialized) {
-      this.render()
-    }
+    this.viewportController.setState({ panX: x, panY: y })
   }
 
   /**
    * Set complete viewport state
    */
   setViewport(viewport: Partial<ViewportState>): void {
-    if (viewport.zoom !== undefined) {
-      this.viewport.zoom = Math.max(0.1, Math.min(10, viewport.zoom))
-    }
-    if (viewport.panX !== undefined) {
-      this.viewport.panX = viewport.panX
-    }
-    if (viewport.panY !== undefined) {
-      this.viewport.panY = viewport.panY
-    }
-    if (this.initialized) {
-      this.render()
-    }
+    this.viewportController.setState(viewport)
   }
 
   /**
    * Reset viewport to default (zoom 1, no pan)
    */
   resetViewport(): void {
-    this.viewport = { zoom: 1, panX: 0, panY: 0 }
-    if (this.initialized) {
+    this.viewportController.reset()
+  }
+
+  /**
+   * Reset viewport with smooth animation
+   */
+  resetViewportAnimated(): void {
+    this.viewportController.resetAnimated()
+  }
+
+  /**
+   * Apply wheel zoom centered on cursor position
+   * @param deltaY - Wheel delta (negative = zoom in)
+   * @param cursorNormX - Cursor X in normalized canvas coords [0, 1]
+   * @param cursorNormY - Cursor Y in normalized canvas coords [0, 1]
+   */
+  applyWheelZoom(deltaY: number, cursorNormX: number, cursorNormY: number): void {
+    this.viewportController.applyWheelZoom(deltaY, cursorNormX, cursorNormY)
+  }
+
+  /**
+   * Apply drag pan
+   * @param deltaNormX - Delta X in normalized canvas coords
+   * @param deltaNormY - Delta Y in normalized canvas coords
+   */
+  applyDragPan(deltaNormX: number, deltaNormY: number): void {
+    this.viewportController.applyDragPan(deltaNormX, deltaNormY)
+  }
+
+  /**
+   * Update viewport controller configuration
+   */
+  setViewportConfig(config: Partial<ViewportConfig>): void {
+    this.viewportController.updateConfig(config)
+  }
+
+  // ============================================================
+  // Interactions
+  // ============================================================
+
+  /**
+   * Attach mouse/wheel interactions for zoom and pan.
+   * @param options - Interaction options including viewport config and callbacks
+   * @returns Cleanup function to detach all listeners
+   */
+  attachInteractions(options: InteractionOptions = {}): () => void {
+    const { onViewportChange, ...viewportConfig } = options
+
+    // Apply viewport config
+    if (Object.keys(viewportConfig).length > 0) {
+      this.viewportController.updateConfig(viewportConfig)
+    }
+
+    // Set up viewport change callback
+    const originalCallback = this.viewportController['onUpdate']
+    this.viewportController.setUpdateCallback((state) => {
       this.render()
+      onViewportChange?.(state)
+    })
+
+    // Wheel zoom handler
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const rect = this.canvas.getBoundingClientRect()
+      const cursorX = (e.clientX - rect.left) / rect.width
+      const cursorY = (e.clientY - rect.top) / rect.height
+      this.viewportController.applyWheelZoom(e.deltaY, cursorX, cursorY)
+    }
+
+    // Drag state
+    let isDragging = false
+    let lastPos = { x: 0, y: 0 }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return
+      const rect = this.canvas.getBoundingClientRect()
+      const deltaX = (e.clientX - lastPos.x) / rect.width
+      const deltaY = (e.clientY - lastPos.y) / rect.height
+      lastPos = { x: e.clientX, y: e.clientY }
+      this.viewportController.applyDragPan(deltaX, deltaY)
+    }
+
+    const handleMouseUp = () => {
+      isDragging = false
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return // Left click only
+      e.preventDefault()
+      isDragging = true
+      lastPos = { x: e.clientX, y: e.clientY }
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    // Double-click to reset
+    const handleDblClick = (e: MouseEvent) => {
+      e.preventDefault()
+      this.viewportController.resetAnimated()
+    }
+
+    // Attach listeners
+    this.canvas.addEventListener('wheel', handleWheel, { passive: false })
+    this.canvas.addEventListener('mousedown', handleMouseDown)
+    this.canvas.addEventListener('dblclick', handleDblClick)
+
+    // Return cleanup function
+    return () => {
+      this.canvas.removeEventListener('wheel', handleWheel)
+      this.canvas.removeEventListener('mousedown', handleMouseDown)
+      this.canvas.removeEventListener('dblclick', handleDblClick)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      // Restore original callback
+      this.viewportController.setUpdateCallback(originalCallback)
     }
   }
+
+  // ============================================================
+  // Auto-resize
+  // ============================================================
+
+  /**
+   * Enable automatic canvas resize based on CSS layout size.
+   * Uses ResizeObserver to sync canvas pixel size with display size.
+   * @returns Cleanup function to disable auto-resize
+   */
+  enableAutoResize(): () => void {
+    if (this.resizeObserver) {
+      return () => this.disableAutoResize()
+    }
+
+    const dpr = window.devicePixelRatio || 1
+
+    this.resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        const pixelWidth = Math.round(width * dpr)
+        const pixelHeight = Math.round(height * dpr)
+
+        if (this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) {
+          this.canvas.width = pixelWidth
+          this.canvas.height = pixelHeight
+          this.forceRender()
+        }
+      }
+    })
+
+    this.resizeObserver.observe(this.canvas)
+
+    return () => this.disableAutoResize()
+  }
+
+  /**
+   * Disable automatic canvas resize
+   */
+  disableAutoResize(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect()
+      this.resizeObserver = null
+    }
+  }
+
+  // ============================================================
+  // Rendering
+  // ============================================================
 
   /**
    * Render with current settings
    */
   private render(): void {
+    if (!this.initialized) return
+
     this.renderer.render({
       exposure: this.options.exposure,
       toneMapping: this.options.toneMapping,
       visualizationMode: this.options.visualizationMode,
       hdrMode: this.options.hdrMode,
       colorSpace: this.options.colorSpace,
-      viewport: this.viewport
+      viewport: this.viewportController.getState()
     })
   }
 
@@ -221,9 +390,23 @@ export class HDRCanvas {
   }
 
   /**
+   * Get loaded image info (dimensions + aspect ratio)
+   */
+  getImageInfo(): ImageInfo {
+    const dims = this.renderer.getImageDimensions()
+    return {
+      width: dims.width,
+      height: dims.height,
+      aspectRatio: dims.width / dims.height
+    }
+  }
+
+  /**
    * Cleanup GPU resources
    */
   destroy(): void {
+    this.disableAutoResize()
+    this.viewportController.destroy()
     if (this.initialized) {
       this.renderer.destroy()
       this.initialized = false

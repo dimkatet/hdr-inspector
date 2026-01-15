@@ -19,3 +19,5 @@ export {
   getCapabilitiesDescription,
   type HDRCapabilities
 } from './hdr-capabilities'
+
+export { ViewportController } from './ViewportController'

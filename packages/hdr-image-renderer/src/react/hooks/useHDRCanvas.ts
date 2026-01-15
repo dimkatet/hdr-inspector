@@ -10,7 +10,7 @@ export interface UseHDRCanvasResult {
 /**
  * Hook for HDRCanvas instance lifecycle management.
  * Creates instance on mount, destroys on unmount.
- * Syncs canvas pixel size with CSS layout size via ResizeObserver.
+ * Enables auto-resize to sync canvas pixel size with CSS layout size.
  */
 export function useHDRCanvas(
   initialOptions: HDRCanvasOptions,
@@ -19,50 +19,26 @@ export function useHDRCanvas(
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const instanceRef = useRef<HDRCanvas | null>(null);
 
-  // Initialize HDRCanvas instance
+  // Initialize HDRCanvas instance with auto-resize
   useEffect(() => {
     if (!canvasRef.current) return;
 
+    let cleanup: (() => void) | undefined;
+
     try {
       instanceRef.current = new HDRCanvas(canvasRef.current, initialOptions);
+      cleanup = instanceRef.current.enableAutoResize();
     } catch (error) {
       onError?.(error as Error);
     }
 
     return () => {
+      cleanup?.();
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount - initialOptions captured in closure
-
-  // Sync canvas pixel size with CSS size
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    const canvas = canvasRef.current;
-    const dpr = window.devicePixelRatio || 1;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const pixelWidth = Math.round(width * dpr);
-        const pixelHeight = Math.round(height * dpr);
-
-        if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-          canvas.width = pixelWidth;
-          canvas.height = pixelHeight;
-          // Re-render with new canvas size
-          instanceRef.current?.forceRender();
-        }
-      }
-    });
-
-    resizeObserver.observe(canvas);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, []);
 
   return { canvasRef, instanceRef };
 }

@@ -82,3 +82,37 @@ export interface ViewportState {
   /** Pan offset Y in normalized coordinates [-1, 1] */
   panY: number
 }
+
+/**
+ * Configuration for viewport controller
+ */
+export interface ViewportConfig {
+  /** Minimum zoom level (default: 0.1) */
+  minZoom?: number
+  /** Maximum zoom level (default: 10) */
+  maxZoom?: number
+  /** Wheel sensitivity for zoom (default: 0.001) */
+  wheelSensitivity?: number
+  /** Animation smoothness 0-1, higher = faster (default: 0.15) */
+  animationSpeed?: number
+}
+
+/**
+ * Image metadata returned on load
+ */
+export interface ImageInfo {
+  /** Image width in pixels */
+  width: number
+  /** Image height in pixels */
+  height: number
+  /** Aspect ratio (width / height) */
+  aspectRatio: number
+}
+
+/**
+ * Options for attachInteractions()
+ */
+export interface InteractionOptions extends ViewportConfig {
+  /** Callback when viewport changes */
+  onViewportChange?: (viewport: ViewportState) => void
+}

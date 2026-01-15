@@ -1,17 +1,14 @@
 import { useEffect } from "react";
 import type { HDRCanvas } from "../../HDRCanvas";
-import type { LinearImageData } from "../../types";
-
-export interface ImageInfo {
-  width: number;
-  height: number;
-  aspectRatio: number;
-}
+import type { LinearImageData, ImageInfo } from "../../types";
 
 export interface UseImageLoaderOptions {
   onLoad?: (info: ImageInfo) => void;
   onError?: (error: Error) => void;
 }
+
+// Re-export ImageInfo for convenience
+export type { ImageInfo } from "../../types";
 
 /**
  * Hook for loading images into HDRCanvas.
