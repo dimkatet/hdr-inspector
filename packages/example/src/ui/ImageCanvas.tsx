@@ -4,9 +4,9 @@
  * Demonstrates usage of @dimkatet/hdr-image-renderer React component
  */
 
-import { useState } from 'react'
-import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer'
-import { HDRImage } from '@dimkatet/hdr-image-renderer/react'
+import { useState, useRef, useCallback, useMemo } from 'react'
+import type { LinearImageData, RenderState, ViewportState } from '@dimkatet/hdr-image-renderer'
+import { HDRImage, type HDRImageHandle, type UseViewportOptions } from '@dimkatet/hdr-image-renderer/react'
 
 interface ImageCanvasProps {
   image: LinearImageData | null
@@ -15,6 +15,8 @@ interface ImageCanvasProps {
 
 export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null)
+  const [zoom, setZoom] = useState(1)
+  const hdrRef = useRef<HDRImageHandle>(null)
 
   const handleError = (err: Error) => {
     console.error('[ImageCanvas] Error:', err)
@@ -24,6 +26,29 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   const handleLoad = () => {
     console.log('[ImageCanvas] Image loaded successfully')
     setError(null)
+  }
+
+  // Update zoom display only when animation ends (avoids 60fps re-renders)
+  const handleAnimationEnd = useCallback((viewport: ViewportState) => {
+    setZoom(viewport.zoom)
+  }, [])
+
+  // Memoize zoomable options to avoid re-attaching listeners
+  const zoomableOptions: UseViewportOptions = useMemo(() => ({
+    enabled: true,
+    onAnimationEnd: handleAnimationEnd,
+  }), [handleAnimationEnd])
+
+  // Button style
+  const btnStyle: React.CSSProperties = {
+    padding: '8px 12px',
+    backgroundColor: '#333',
+    color: '#fff',
+    border: '1px solid #555',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    minWidth: '44px',
   }
 
   if (error) {
@@ -47,23 +72,53 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   }
 
   return (
-    <HDRImage
-      fitToImage
-      image={image ?? undefined}
-      options={{
-        ...renderState,
-        transparent: true,
-      }}
-      onLoad={handleLoad}
-      onError={handleError}
-      zoomable={{
-        enabled: true,
-        animationSpeed: 0.15,
-      }}
-      style={{
-        display: "block",
-        height: "60vh",
-      }}
-    />
+    <div>
+      <HDRImage
+        ref={hdrRef}
+        fitToImage
+        image={image ?? undefined}
+        options={{
+          ...renderState,
+          transparent: true,
+        }}
+        onLoad={handleLoad}
+        onError={handleError}
+        zoomable={zoomableOptions}
+        style={{
+          display: "block",
+          height: "60vh",
+        }}
+      />
+
+      {/* Viewport Controls */}
+      <div
+        style={{
+          marginTop: '12px',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+        }}
+      >
+        <button style={btnStyle} onClick={() => hdrRef.current?.zoomOut()}>
+          -
+        </button>
+        <span style={{ color: '#ccc', minWidth: '60px', textAlign: 'center' }}>
+          {zoom.toFixed(2)}x
+        </span>
+        <button style={btnStyle} onClick={() => hdrRef.current?.zoomIn()}>
+          +
+        </button>
+        <button style={btnStyle} onClick={() => hdrRef.current?.zoomToFit()}>
+          Fit
+        </button>
+        <button style={btnStyle} onClick={() => hdrRef.current?.zoomToActual()}>
+          1:1
+        </button>
+        <button style={btnStyle} onClick={() => hdrRef.current?.resetViewport()}>
+          Reset
+        </button>
+      </div>
+    </div>
   );
 }

@@ -5,6 +5,10 @@ import type { ViewportState, ViewportConfig } from "../../types";
 export interface UseViewportOptions extends ViewportConfig {
   /** Enable zoom/pan interactions */
   enabled?: boolean;
+  /** Callback when viewport changes (fires on every frame during animation) */
+  onViewportChange?: (viewport: ViewportState) => void;
+  /** Callback when animation completes (fires once per animation) */
+  onAnimationEnd?: (viewport: ViewportState) => void;
 }
 
 export interface UseViewportResult {
@@ -23,7 +27,7 @@ export function useViewport(
   _canvasRef: React.RefObject<HTMLCanvasElement | null>,
   options: UseViewportOptions = {}
 ): UseViewportResult {
-  const { enabled = false, ...viewportConfig } = options;
+  const { enabled = false, onViewportChange, onAnimationEnd, ...viewportConfig } = options;
 
   const [viewport, setViewport] = useState<ViewportState>({
     zoom: 1,
@@ -37,10 +41,14 @@ export function useViewport(
 
     return instanceRef.current.attachInteractions({
       ...viewportConfig,
-      onViewportChange: setViewport,
+      onViewportChange: (v) => {
+        setViewport(v);
+        onViewportChange?.(v);
+      },
+      onAnimationEnd,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.wheelSensitivity, viewportConfig.animationSpeed]);
+  }, [enabled, instanceRef, onViewportChange, onAnimationEnd, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.wheelSensitivity, viewportConfig.animationSpeed]);
 
   // Reset function
   const resetViewport = useCallback(() => {

@@ -30,6 +30,7 @@ export class ViewportController {
   private animationId: number | null = null
   private config: Required<ViewportConfig>
   private onUpdate: ((state: ViewportState) => void) | null = null
+  private onAnimationEnd: ((state: ViewportState) => void) | null = null
 
   constructor(config: Partial<ViewportConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -84,6 +85,45 @@ export class ViewportController {
    */
   resetAnimated(): void {
     this.target = { zoom: 1, panX: 0, panY: 0 }
+    this.startAnimation()
+  }
+
+  /**
+   * Zoom in by a factor (centered)
+   * @param factor - Zoom multiplier (default: 2)
+   */
+  zoomIn(factor: number = 2): void {
+    const newZoom = Math.min(this.config.maxZoom, this.target.zoom * factor)
+    this.target = { ...this.target, zoom: newZoom }
+    this.startAnimation()
+  }
+
+  /**
+   * Zoom out by a factor (centered)
+   * @param factor - Zoom divisor (default: 2)
+   */
+  zoomOut(factor: number = 2): void {
+    const newZoom = Math.max(this.config.minZoom, this.target.zoom / factor)
+    // Clamp pan when zooming out
+    this.target = {
+      zoom: newZoom,
+      panX: clampPan(this.target.panX, newZoom),
+      panY: clampPan(this.target.panY, newZoom),
+    }
+    this.startAnimation()
+  }
+
+  /**
+   * Set zoom to specific level with animation (centered)
+   * @param zoom - Target zoom level
+   */
+  zoomTo(zoom: number): void {
+    const newZoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, zoom))
+    this.target = {
+      zoom: newZoom,
+      panX: clampPan(this.target.panX, newZoom),
+      panY: clampPan(this.target.panY, newZoom),
+    }
     this.startAnimation()
   }
 
@@ -143,10 +183,47 @@ export class ViewportController {
   }
 
   /**
-   * Set callback for viewport updates
+   * Apply pinch zoom centered on a point
+   * @param scaleDelta - Scale multiplier (>1 = zoom in, <1 = zoom out)
+   * @param centerX - Pinch center X in normalized canvas coords [0, 1]
+   * @param centerY - Pinch center Y in normalized canvas coords [0, 1]
+   */
+  applyPinchZoom(scaleDelta: number, centerX: number, centerY: number): void {
+    const newZoom = Math.max(
+      this.config.minZoom,
+      Math.min(this.config.maxZoom, this.state.zoom * scaleDelta)
+    )
+
+    // Zoom toward pinch center
+    const centerOffsetX = centerX - 0.5
+    const centerOffsetY = centerY - 0.5
+
+    const newPanX = this.state.panX + (centerOffsetX * (1 - 1 / scaleDelta)) / newZoom
+    const newPanY = this.state.panY + (centerOffsetY * (1 - 1 / scaleDelta)) / newZoom
+
+    // Direct update (no animation during pinch)
+    this.state = {
+      zoom: newZoom,
+      panX: clampPan(newPanX, newZoom),
+      panY: clampPan(newPanY, newZoom),
+    }
+    this.target = { ...this.state }
+
+    this.onUpdate?.(this.state)
+  }
+
+  /**
+   * Set callback for viewport updates (fires on every frame)
    */
   setUpdateCallback(callback: ((state: ViewportState) => void) | null): void {
     this.onUpdate = callback
+  }
+
+  /**
+   * Set callback for when animation completes (fires once per animation)
+   */
+  setAnimationEndCallback(callback: ((state: ViewportState) => void) | null): void {
+    this.onAnimationEnd = callback
   }
 
   /**
@@ -167,6 +244,7 @@ export class ViewportController {
         this.state = { ...this.target }
         this.animationId = null
         this.onUpdate?.(this.state)
+        this.onAnimationEnd?.(this.state)
         return
       }
 
@@ -218,5 +296,6 @@ export class ViewportController {
   destroy(): void {
     this.stopAnimation()
     this.onUpdate = null
+    this.onAnimationEnd = null
   }
 }

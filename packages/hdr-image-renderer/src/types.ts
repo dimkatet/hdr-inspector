@@ -113,6 +113,8 @@ export interface ImageInfo {
  * Options for attachInteractions()
  */
 export interface InteractionOptions extends ViewportConfig {
-  /** Callback when viewport changes */
+  /** Callback when viewport changes (fires on every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void
+  /** Callback when animation completes (fires once per animation) */
+  onAnimationEnd?: (viewport: ViewportState) => void
 }

@@ -200,6 +200,56 @@ export class HDRCanvas {
   }
 
   /**
+   * Zoom in by a factor (centered, animated)
+   * @param factor - Zoom multiplier (default: 2)
+   */
+  zoomIn(factor?: number): void {
+    this.viewportController.zoomIn(factor)
+  }
+
+  /**
+   * Zoom out by a factor (centered, animated)
+   * @param factor - Zoom divisor (default: 2)
+   */
+  zoomOut(factor?: number): void {
+    this.viewportController.zoomOut(factor)
+  }
+
+  /**
+   * Zoom to fit image in canvas (animated)
+   * Shows the entire image with maximum size that fits
+   */
+  zoomToFit(): void {
+    // At zoom=1, shader does contain fit, so zoom=1 always shows full image
+    this.viewportController.zoomTo(1)
+  }
+
+  /**
+   * Zoom to actual size (1:1 pixel mapping, animated)
+   * One image pixel = one screen pixel
+   */
+  zoomToActual(): void {
+    const imageDims = this.renderer.getImageDimensions()
+    if (imageDims.width === 0 || imageDims.height === 0) return
+
+    const canvasRect = this.canvas.getBoundingClientRect()
+    if (canvasRect.width === 0 || canvasRect.height === 0) return
+
+    // At zoom=1, image is fit to canvas (contain mode)
+    // We need to calculate what zoom shows 1:1 pixels
+    // The contain transform scales image to fit, so we need to invert that
+    const imageAspect = imageDims.width / imageDims.height
+    const canvasAspect = canvasRect.width / canvasRect.height
+
+    const fitScale = imageAspect > canvasAspect
+      ? canvasRect.width / imageDims.width   // Image is wider
+      : canvasRect.height / imageDims.height // Image is taller
+
+    // zoom = 1 / fitScale gives us 1:1 pixel mapping
+    this.viewportController.zoomTo(1 / fitScale)
+  }
+
+  /**
    * Apply wheel zoom centered on cursor position
    * @param deltaY - Wheel delta (negative = zoom in)
    * @param cursorNormX - Cursor X in normalized canvas coords [0, 1]
@@ -235,7 +285,7 @@ export class HDRCanvas {
    * @returns Cleanup function to detach all listeners
    */
   attachInteractions(options: InteractionOptions = {}): () => void {
-    const { onViewportChange, ...viewportConfig } = options
+    const { onViewportChange, onAnimationEnd, ...viewportConfig } = options
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
@@ -243,11 +293,17 @@ export class HDRCanvas {
     }
 
     // Set up viewport change callback
-    const originalCallback = this.viewportController['onUpdate']
+    const originalUpdateCallback = this.viewportController['onUpdate']
     this.viewportController.setUpdateCallback((state) => {
       this.renderWithViewport(state)
       onViewportChange?.(state)
     })
+
+    // Set up animation end callback
+    const originalAnimationEndCallback = this.viewportController['onAnimationEnd']
+    if (onAnimationEnd) {
+      this.viewportController.setAnimationEndCallback(onAnimationEnd)
+    }
 
     // Create interaction handler
     const handler = new InteractionHandler(this.canvas, {
@@ -256,14 +312,17 @@ export class HDRCanvas {
       onDragPan: (deltaX, deltaY) =>
         this.viewportController.applyDragPan(deltaX, deltaY),
       onReset: () => this.viewportController.resetAnimated(),
-    });
+      onPinchZoom: (scaleDelta, centerX, centerY) =>
+        this.viewportController.applyPinchZoom(scaleDelta, centerX, centerY),
+    })
 
     const detach = handler.attach()
 
     // Return cleanup function
     return () => {
       detach()
-      this.viewportController.setUpdateCallback(originalCallback)
+      this.viewportController.setUpdateCallback(originalUpdateCallback)
+      this.viewportController.setAnimationEndCallback(originalAnimationEndCallback)
     }
   }
 
