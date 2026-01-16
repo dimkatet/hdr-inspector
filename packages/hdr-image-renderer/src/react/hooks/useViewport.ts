@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HDRCanvas } from "../../HDRCanvas";
-import type { ViewportState, ViewportConfig, InteractionConfig } from "../../types";
+import type { ViewportState, ViewportConfig, PointerConfig, KeyboardConfig } from "../../types";
 
-export interface UseViewportOptions extends ViewportConfig, InteractionConfig {
+export interface UseViewportOptions extends ViewportConfig, PointerConfig {
   /** Enable zoom/pan interactions */
   enabled?: boolean;
+  /** Keyboard control configuration (true for defaults, object for custom config) */
+  keyboard?: boolean | KeyboardConfig;
   /** Callback when viewport changes (fires on every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void;
   /** Callback when animation completes (fires once per animation) */
@@ -27,7 +29,7 @@ export function useViewport(
   _canvasRef: React.RefObject<HTMLCanvasElement | null>,
   options: UseViewportOptions = {}
 ): UseViewportResult {
-  const { enabled = false, onViewportChange, onAnimationEnd, ...viewportConfig } = options;
+  const { enabled = false, onViewportChange, onAnimationEnd, keyboard, ...viewportConfig } = options;
 
   const [viewport, setViewport] = useState<ViewportState>({
     zoom: 1,
@@ -37,10 +39,13 @@ export function useViewport(
 
   // Attach interactions when enabled
   useEffect(() => {
-    if (!enabled || !instanceRef.current) return;
+    if (!enabled || !instanceRef.current) {
+      return;
+    }
 
     return instanceRef.current.attachInteractions({
       ...viewportConfig,
+      keyboard,
       onViewportChange: (v) => {
         setViewport(v);
         onViewportChange?.(v);
@@ -48,7 +53,7 @@ export function useViewport(
       onAnimationEnd,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.wheelSensitivity, viewportConfig.animationSpeed]);
+  }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.animationSpeed, keyboard]);
 
   // Update callbacks when they change (without re-attaching interactions)
   useEffect(() => {

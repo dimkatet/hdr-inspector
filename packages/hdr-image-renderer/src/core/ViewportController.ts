@@ -10,7 +10,6 @@ import type { ViewportState, ViewportConfig } from '../types'
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
   minZoom: 0.1,
   maxZoom: 10,
-  wheelSensitivity: 0.001,
   animationSpeed: 0.15,
 }
 
@@ -129,12 +128,11 @@ export class ViewportController {
 
   /**
    * Apply wheel zoom centered on cursor position
-   * @param deltaY - Wheel delta (negative = zoom in)
+   * @param zoomDelta - Pre-calculated zoom delta (from PointerHandler)
    * @param cursorX - Cursor X in normalized canvas coords [0, 1]
    * @param cursorY - Cursor Y in normalized canvas coords [0, 1]
    */
-  applyWheelZoom(deltaY: number, cursorX: number, cursorY: number): void {
-    const zoomDelta = -deltaY * this.config.wheelSensitivity
+  applyWheelZoom(zoomDelta: number, cursorX: number, cursorY: number): void {
     const prevTarget = this.target
     const newZoom = Math.max(
       this.config.minZoom,

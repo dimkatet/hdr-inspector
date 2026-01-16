@@ -21,4 +21,5 @@ export {
 } from './hdr-capabilities'
 
 export { ViewportController } from './ViewportController'
-export { InteractionHandler, type InteractionCallbacks } from './InteractionHandler'
+export { PointerHandler, type PointerCallbacks } from './PointerHandler'
+export { KeyboardHandler, type KeyboardCallbacks } from './KeyboardHandler'

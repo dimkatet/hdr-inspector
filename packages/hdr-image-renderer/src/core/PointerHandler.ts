@@ -1,13 +1,13 @@
 /**
- * InteractionHandler - DOM event handling for canvas interactions
+ * PointerHandler - DOM event handling for pointer-based canvas interactions
  *
- * Converts raw DOM events to normalized callbacks.
+ * Handles mouse and touch events, converting raw DOM events to normalized callbacks.
  * Platform-specific code is isolated here, keeping other classes pure.
  */
 
-export interface InteractionCallbacks {
-  /** Called on wheel zoom. deltaY: wheel delta, cursorX/Y: normalized [0,1] */
-  onWheelZoom: (deltaY: number, cursorX: number, cursorY: number) => void
+export interface PointerCallbacks {
+  /** Called on wheel zoom. zoomDelta: calculated zoom change, cursorX/Y: normalized [0,1] */
+  onWheelZoom: (zoomDelta: number, cursorX: number, cursorY: number) => void
   /** Called on drag pan. deltaX/Y: normalized movement */
   onDragPan: (deltaX: number, deltaY: number) => void
   /** Called on double-click or double-tap (reset) */
@@ -16,19 +16,21 @@ export interface InteractionCallbacks {
   onPinchZoom?: (scaleDelta: number, centerX: number, centerY: number) => void
 }
 
-export interface InteractionHandlerConfig {
+export interface PointerHandlerConfig {
   /** Enable mouse wheel zoom (default: true) */
   wheel?: boolean
   /** Enable mouse drag pan (default: true) */
   drag?: boolean
   /** Enable touch gestures (default: true) */
   touch?: boolean
+  /** Wheel zoom sensitivity (default: 0.001). Note: prefer using wheel as object for new code */
+  wheelSensitivity?: number
 }
 
-export class InteractionHandler {
+export class PointerHandler {
   private canvas: HTMLCanvasElement
-  private callbacks: InteractionCallbacks
-  private config: Required<InteractionHandlerConfig>
+  private callbacks: PointerCallbacks
+  private config: Required<PointerHandlerConfig>
   private attached = false
 
   // Mouse drag state
@@ -55,13 +57,14 @@ export class InteractionHandler {
   private boundHandleTouchMove: (e: TouchEvent) => void
   private boundHandleTouchEnd: (e: TouchEvent) => void
 
-  constructor(canvas: HTMLCanvasElement, callbacks: InteractionCallbacks, config: InteractionHandlerConfig = {}) {
+  constructor(canvas: HTMLCanvasElement, callbacks: PointerCallbacks, config: PointerHandlerConfig = {}) {
     this.canvas = canvas
     this.callbacks = callbacks
     this.config = {
       wheel: config.wheel ?? true,
       drag: config.drag ?? true,
       touch: config.touch ?? true,
+      wheelSensitivity: config.wheelSensitivity ?? 0.001,
     }
 
     // Bind handlers once
@@ -153,7 +156,11 @@ export class InteractionHandler {
     const rect = this.canvas.getBoundingClientRect()
     const cursorX = (e.clientX - rect.left) / rect.width
     const cursorY = (e.clientY - rect.top) / rect.height
-    this.callbacks.onWheelZoom(e.deltaY, cursorX, cursorY)
+
+    // Calculate zoom delta using sensitivity
+    const zoomDelta = -e.deltaY * this.config.wheelSensitivity
+
+    this.callbacks.onWheelZoom(zoomDelta, cursorX, cursorY)
   }
 
   private handleMouseDown(e: MouseEvent): void {
@@ -201,9 +208,9 @@ export class InteractionHandler {
       const now = Date.now()
       if (
         this.lastTapPos &&
-        now - this.lastTapTime < InteractionHandler.DOUBLE_TAP_DELAY &&
+        now - this.lastTapTime < PointerHandler.DOUBLE_TAP_DELAY &&
         this.getDistance(this.lastTapPos, { x: touch.clientX, y: touch.clientY }) <
-          InteractionHandler.DOUBLE_TAP_DISTANCE
+          PointerHandler.DOUBLE_TAP_DISTANCE
       ) {
         // Double-tap detected
         this.callbacks.onReset()

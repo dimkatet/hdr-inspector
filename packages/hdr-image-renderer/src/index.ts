@@ -6,9 +6,11 @@ export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   ViewportController,
-  InteractionHandler,
+  PointerHandler,
+  KeyboardHandler,
   type HDRCapabilities,
-  type InteractionCallbacks
+  type PointerCallbacks,
+  type KeyboardCallbacks
 } from './core'
 export type {
   HDRCanvasOptions,
@@ -20,5 +22,8 @@ export type {
   ViewportState,
   ViewportConfig,
   ImageInfo,
-  InteractionOptions
+  InteractionOptions,
+  PointerConfig,
+  WheelConfig,
+  KeyboardConfig
 } from './types'

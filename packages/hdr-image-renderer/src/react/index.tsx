@@ -2,7 +2,7 @@
 // Thin wrapper around HDRCanvas class with composable hooks
 
 import { useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import type { HDRCanvasOptions, LinearImageData, ViewportState, InteractionConfig, ViewportConfig } from "../types";
+import type { HDRCanvasOptions, LinearImageData, ViewportState, PointerConfig, ViewportConfig, KeyboardConfig } from "../types";
 import {
   useHDRCanvas,
   useImageLoader,
@@ -25,18 +25,34 @@ import {
  * interactions={{ wheel: true, drag: false, touch: true }}
  *
  * @example
- * // Enable interactions with custom viewport config
+ * // Enable interactions with custom wheel sensitivity
  * interactions={{
- *   wheel: true,
+ *   wheel: { sensitivity: 0.002 },
  *   drag: true,
  *   touch: true,
  *   minZoom: 0.5,
  *   maxZoom: 20,
- *   wheelSensitivity: 0.002,
  *   animationSpeed: 0.2,
  * }}
+ *
+ * @example
+ * // Enable interactions with custom keyboard bindings
+ * interactions={{
+ *   wheel: true,
+ *   drag: true,
+ *   touch: true,
+ *   keyboard: {
+ *     enabled: true,
+ *     panUp: ['w', 'ArrowUp'],
+ *     zoomIn: ['+', '='],
+ *     panStep: 0.15,
+ *   }
+ * }}
  */
-export type InteractionsConfig = InteractionConfig & ViewportConfig;
+export type InteractionsConfig = PointerConfig & ViewportConfig & {
+  /** Keyboard control configuration (true for defaults, object for custom config) */
+  keyboard?: boolean | KeyboardConfig;
+};
 
 /**
  * Imperative handle exposed via ref
@@ -152,6 +168,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
       ...style,
       cursor: viewportOptions.enabled ? "grab" : undefined,
       aspectRatio: fitToImage ? aspectRatio : style?.aspectRatio,
+      outline: 'none', // Remove focus outline for keyboard navigation
     };
 
     return (

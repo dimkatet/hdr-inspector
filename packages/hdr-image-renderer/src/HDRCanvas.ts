@@ -9,7 +9,8 @@ import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState, Vie
 import { decodeRadianceHDR } from './decoders'
 import { WebGPURenderer } from './renderer'
 import { ViewportController } from './core/ViewportController'
-import { InteractionHandler } from './core/InteractionHandler'
+import { PointerHandler } from './core/PointerHandler'
+import { KeyboardHandler } from './core/KeyboardHandler'
 
 export class HDRCanvas {
   private canvas: HTMLCanvasElement
@@ -292,12 +293,12 @@ export class HDRCanvas {
   // ============================================================
 
   /**
-   * Attach mouse/wheel interactions for zoom and pan.
+   * Attach pointer and keyboard interactions for zoom and pan.
    * @param options - Interaction options including viewport config and callbacks
    * @returns Cleanup function to detach all listeners
    */
   attachInteractions(options: InteractionOptions = {}): () => void {
-    const { onViewportChange, onAnimationEnd, wheel, drag, touch, ...viewportConfig } = options
+    const { onViewportChange, onAnimationEnd, wheel, drag, touch, keyboard, ...viewportConfig } = options
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
@@ -317,26 +318,47 @@ export class HDRCanvas {
       this.viewportController.setAnimationEndCallback(onAnimationEnd)
     }
 
-    // Create interaction handler with config
-    const handler = new InteractionHandler(
+    // Parse wheel config
+    const wheelEnabled = typeof wheel === 'boolean' ? wheel : (wheel?.enabled ?? true)
+    const wheelSensitivity = typeof wheel === 'object' ? wheel.sensitivity : undefined
+
+    // Create pointer handler with config
+    const pointerHandler = new PointerHandler(
       this.canvas,
       {
-        onWheelZoom: (deltaY, cursorX, cursorY) =>
-          this.viewportController.applyWheelZoom(deltaY, cursorX, cursorY),
+        onWheelZoom: (zoomDelta, cursorX, cursorY) =>
+          this.viewportController.applyWheelZoom(zoomDelta, cursorX, cursorY),
         onDragPan: (deltaX, deltaY) =>
           this.viewportController.applyDragPan(deltaX, deltaY),
         onReset: () => this.viewportController.resetAnimated(),
         onPinchZoom: (scaleDelta, centerX, centerY) =>
           this.viewportController.applyPinchZoom(scaleDelta, centerX, centerY),
       },
-      { wheel, drag, touch }
+      { wheel: wheelEnabled, drag, touch, wheelSensitivity }
     )
 
-    const detach = handler.attach()
+    // Create keyboard handler with config
+    const keyboardHandler = new KeyboardHandler(
+      this.canvas,
+      {
+        onPan: (deltaX, deltaY) =>
+          this.viewportController.applyDragPan(deltaX, deltaY),
+        onZoomIn: () => this.zoomIn(),
+        onZoomOut: () => this.zoomOut(),
+        onZoomToFit: () => this.zoomToFit(),
+        onZoomToActual: () => this.zoomToActual(),
+        onReset: () => this.viewportController.resetAnimated(),
+      },
+      typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
+    )
+
+    const detachPointer = pointerHandler.attach()
+    const detachKeyboard = keyboardHandler.attach()
 
     // Return cleanup function
     return () => {
-      detach()
+      detachPointer()
+      detachKeyboard()
       this.viewportController.setUpdateCallback(originalUpdateCallback)
       this.viewportController.setAnimationEndCallback(originalAnimationEndCallback)
     }
