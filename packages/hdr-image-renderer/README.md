@@ -8,6 +8,8 @@ WebGPU-based HDR image viewer with native HDR display support.
 - 📊 **Radiance HDR (.hdr) decoder** built-in
 - 🎛️ **Tone mapping** operators (None, Reinhard, ACES)
 - 🌈 **Color space support** (sRGB, Display P3, Rec.2020)
+- 🖱️ **Interactive** - zoom, pan, touch gestures
+- 🎯 **Programmatic control** - imperative API via ref
 - ⚡ **Zero dependencies** (except React for `/react` export)
 - 📦 **Tree-shakeable** ESM exports
 - 🔧 **TypeScript** first-class support
@@ -43,57 +45,104 @@ const hdrCanvas = new HDRCanvas(canvas, {
   colorSpace: 'display-p3'
 })
 
-// Load HDR file
+// Initialize and load HDR file
+await hdrCanvas.initialize()
 const response = await fetch('image.hdr')
 const buffer = await response.arrayBuffer()
 await hdrCanvas.loadRadianceHDR(buffer)
 
-// Or load from File input
-input.addEventListener('change', async (e) => {
-  const file = e.target.files[0]
-  await hdrCanvas.loadFile(file)
+// Enable auto-resize
+hdrCanvas.enableAutoResize()
+
+// Attach interactions (wheel, drag, touch)
+const cleanup = hdrCanvas.attachInteractions({
+  wheel: true,
+  drag: true,
+  touch: true,
+  minZoom: 0.5,
+  maxZoom: 20,
+  onAnimationEnd: (viewport) => {
+    console.log('Zoom:', viewport.zoom)
+  }
 })
 
-// Update settings
+// Or programmatic control
+hdrCanvas.zoomIn(2)      // Zoom in 2x
+hdrCanvas.zoomOut()      // Zoom out 2x
+hdrCanvas.zoomToFit()    // Show entire image
+hdrCanvas.zoomToActual() // 1:1 pixel mapping
+hdrCanvas.resetViewportAnimated() // Reset with animation
+
+// Update render settings
 hdrCanvas.setExposure(1.5)
 hdrCanvas.setToneMapping('reinhard')
 hdrCanvas.setHDRMode(false)
+
+// Cleanup
+cleanup() // Remove interaction listeners
+hdrCanvas.destroy() // Destroy GPU resources
 ```
 
 ### React
 
 ```tsx
-import { HDRImage } from '@dimkatet/hdr-image-renderer/react'
-import { useState } from 'react'
+import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react'
+import { useState, useRef } from 'react'
 
 function App() {
   const [file, setFile] = useState<File | null>(null)
   const [exposure, setExposure] = useState(0)
+  const [zoom, setZoom] = useState(1)
+  const hdrRef = useRef<HDRImageHandle>(null)
 
   return (
     <>
       <HDRImage
+        ref={hdrRef}
         image={file}
-        exposure={exposure}
-        toneMapping="aces"
-        hdrMode={true}
-        colorSpace="display-p3"
+        options={{
+          exposure,
+          toneMapping: 'aces',
+          hdrMode: true,
+          colorSpace: 'display-p3',
+        }}
+        interactions={{
+          wheel: true,
+          drag: true,
+          touch: true,
+          minZoom: 0.5,
+          maxZoom: 20,
+        }}
+        onAnimationEnd={(viewport) => setZoom(viewport.zoom)}
         onLoad={() => console.log('Loaded!')}
         onError={(err) => console.error(err)}
+        fitToImage
+        style={{ maxHeight: '80vh' }}
       />
-      <input
-        type="file"
-        accept=".hdr"
-        onChange={(e) => setFile(e.target.files[0])}
-      />
-      <input
-        type="range"
-        min="-5"
-        max="5"
-        step="0.1"
-        value={exposure}
-        onChange={(e) => setExposure(parseFloat(e.target.value))}
-      />
+
+      {/* Controls */}
+      <div>
+        <input
+          type="file"
+          accept=".hdr"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <input
+          type="range"
+          min="-5"
+          max="5"
+          step="0.1"
+          value={exposure}
+          onChange={(e) => setExposure(parseFloat(e.target.value))}
+        />
+        <div>
+          <button onClick={() => hdrRef.current?.zoomIn()}>Zoom In</button>
+          <span>Zoom: {zoom.toFixed(2)}x</span>
+          <button onClick={() => hdrRef.current?.zoomOut()}>Zoom Out</button>
+          <button onClick={() => hdrRef.current?.zoomToFit()}>Fit</button>
+          <button onClick={() => hdrRef.current?.resetViewport()}>Reset</button>
+        </div>
+      </div>
     </>
   )
 }
@@ -144,28 +193,102 @@ new HDRCanvas(canvas: HTMLCanvasElement, options?: HDRCanvasOptions)
 
 #### Methods
 
+**Loading:**
 - `initialize(): Promise<void>` - Initialize WebGPU (called automatically on first load)
 - `loadImage(data: LinearImageData): Promise<void>` - Load from LinearImageData
 - `loadRadianceHDR(buffer: ArrayBuffer): Promise<void>` - Load Radiance HDR file
 - `loadFile(file: File): Promise<void>` - Load from File (auto-detects format)
+
+**Rendering:**
 - `setExposure(ev: number): void` - Set exposure value
 - `setToneMapping(op: string): void` - Set tone mapping operator
 - `setHDRMode(enabled: boolean): void` - Enable/disable HDR mode
 - `setColorSpace(cs: string): void` - Set color space
 - `setVisualizationMode(mode: string): void` - Set visualization mode
 - `getRenderState(): RenderState` - Get current render state
+
+**Viewport Control:**
+- `zoomIn(factor?: number): void` - Zoom in (default: 2x)
+- `zoomOut(factor?: number): void` - Zoom out (default: 2x)
+- `zoomTo(zoom: number): void` - Set specific zoom level
+- `zoomToFit(): void` - Show entire image (zoom to 1.0)
+- `zoomToActual(): void` - 1:1 pixel mapping
+- `resetViewportAnimated(): void` - Reset viewport with animation
+- `applyWheelZoom(deltaY, cursorX, cursorY): void` - Apply wheel zoom (low-level)
+- `applyDragPan(deltaX, deltaY): void` - Apply drag pan (low-level)
+
+**Interactions:**
+- `attachInteractions(options?: InteractionOptions): () => void` - Attach interaction listeners, returns cleanup function
+- `setViewportCallbacks(onViewportChange?, onAnimationEnd?): void` - Update viewport callbacks
+
+**Lifecycle:**
+- `enableAutoResize(): () => void` - Auto-resize canvas to match CSS size
+- `disableAutoResize(): void` - Disable auto-resize
+- `getImageInfo(): ImageInfo` - Get loaded image dimensions
 - `destroy(): void` - Cleanup GPU resources
 
 ### React Component
 
 ```typescript
-interface HDRImageProps extends HDRCanvasOptions {
+interface HDRImageProps {
+  // Image source
   image?: LinearImageData | File
-  onLoad?: () => void
+
+  // Render options
+  options: HDRCanvasOptions  // { exposure, toneMapping, hdrMode, colorSpace, visualizationMode, transparent }
+
+  // Interactions
+  interactions?: boolean | InteractionsConfig  // Enable/configure zoom, pan, touch
+  onViewportChange?: (viewport: ViewportState) => void  // Fires every frame
+  onAnimationEnd?: (viewport: ViewportState) => void    // Fires once per animation
+
+  // Layout
+  fitToImage?: boolean  // Auto-adjust canvas aspect ratio
+
+  // Callbacks
+  onLoad?: (info: ImageInfo) => void  // Called when image loads
   onError?: (error: Error) => void
+
+  // HTML canvas attributes
   className?: string
   style?: React.CSSProperties
 }
+
+interface InteractionsConfig {
+  // Which interactions are enabled
+  wheel?: boolean  // Mouse wheel zoom
+  drag?: boolean   // Mouse drag pan
+  touch?: boolean  // Touch gestures (pinch, drag, double-tap)
+
+  // Viewport behavior
+  minZoom?: number           // Default: 0.1
+  maxZoom?: number           // Default: 10
+  wheelSensitivity?: number  // Default: 0.001
+  animationSpeed?: number    // Default: 0.15
+}
+
+interface HDRImageHandle {
+  // Zoom controls
+  zoomIn: (factor?: number) => void
+  zoomOut: (factor?: number) => void
+  zoomToFit: () => void
+  zoomToActual: () => void
+
+  // Viewport
+  resetViewport: () => void
+  getViewport: () => ViewportState
+  setViewport: (viewport: Partial<ViewportState>) => void
+
+  // Access underlying canvas
+  getCanvas: () => HDRCanvas | null
+}
+```
+
+**Usage with ref:**
+```tsx
+const ref = useRef<HDRImageHandle>(null)
+ref.current?.zoomIn()
+ref.current?.getViewport()
 ```
 
 ## Color Science
