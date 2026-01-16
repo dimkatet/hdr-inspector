@@ -16,9 +16,19 @@ export interface InteractionCallbacks {
   onPinchZoom?: (scaleDelta: number, centerX: number, centerY: number) => void
 }
 
+export interface InteractionHandlerConfig {
+  /** Enable mouse wheel zoom (default: true) */
+  wheel?: boolean
+  /** Enable mouse drag pan (default: true) */
+  drag?: boolean
+  /** Enable touch gestures (default: true) */
+  touch?: boolean
+}
+
 export class InteractionHandler {
   private canvas: HTMLCanvasElement
   private callbacks: InteractionCallbacks
+  private config: Required<InteractionHandlerConfig>
   private attached = false
 
   // Mouse drag state
@@ -45,9 +55,14 @@ export class InteractionHandler {
   private boundHandleTouchMove: (e: TouchEvent) => void
   private boundHandleTouchEnd: (e: TouchEvent) => void
 
-  constructor(canvas: HTMLCanvasElement, callbacks: InteractionCallbacks) {
+  constructor(canvas: HTMLCanvasElement, callbacks: InteractionCallbacks, config: InteractionHandlerConfig = {}) {
     this.canvas = canvas
     this.callbacks = callbacks
+    this.config = {
+      wheel: config.wheel ?? true,
+      drag: config.drag ?? true,
+      touch: config.touch ?? true,
+    }
 
     // Bind handlers once
     this.boundHandleWheel = this.handleWheel.bind(this)
@@ -69,16 +84,22 @@ export class InteractionHandler {
       return () => this.detach()
     }
 
-    // Mouse events
-    this.canvas.addEventListener('wheel', this.boundHandleWheel, { passive: false })
-    this.canvas.addEventListener('mousedown', this.boundHandleMouseDown)
-    this.canvas.addEventListener('dblclick', this.boundHandleDblClick)
+    // Mouse events (wheel and drag)
+    if (this.config.wheel) {
+      this.canvas.addEventListener('wheel', this.boundHandleWheel, { passive: false })
+    }
+    if (this.config.drag) {
+      this.canvas.addEventListener('mousedown', this.boundHandleMouseDown)
+      this.canvas.addEventListener('dblclick', this.boundHandleDblClick)
+    }
 
     // Touch events
-    this.canvas.addEventListener('touchstart', this.boundHandleTouchStart, { passive: false })
-    this.canvas.addEventListener('touchmove', this.boundHandleTouchMove, { passive: false })
-    this.canvas.addEventListener('touchend', this.boundHandleTouchEnd)
-    this.canvas.addEventListener('touchcancel', this.boundHandleTouchEnd)
+    if (this.config.touch) {
+      this.canvas.addEventListener('touchstart', this.boundHandleTouchStart, { passive: false })
+      this.canvas.addEventListener('touchmove', this.boundHandleTouchMove, { passive: false })
+      this.canvas.addEventListener('touchend', this.boundHandleTouchEnd)
+      this.canvas.addEventListener('touchcancel', this.boundHandleTouchEnd)
+    }
 
     this.attached = true
 

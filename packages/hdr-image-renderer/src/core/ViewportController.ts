@@ -227,6 +227,17 @@ export class ViewportController {
   }
 
   /**
+   * Set both callbacks at once (convenience method)
+   */
+  setCallbacks(
+    onUpdate: ((state: ViewportState) => void) | null | undefined,
+    onAnimationEnd: ((state: ViewportState) => void) | null | undefined
+  ): void {
+    if (onUpdate !== undefined) this.onUpdate = onUpdate ?? null
+    if (onAnimationEnd !== undefined) this.onAnimationEnd = onAnimationEnd ?? null
+  }
+
+  /**
    * Start animation loop
    */
   private startAnimation(): void {

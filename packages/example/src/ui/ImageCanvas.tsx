@@ -4,9 +4,9 @@
  * Demonstrates usage of @dimkatet/hdr-image-renderer React component
  */
 
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { LinearImageData, RenderState, ViewportState } from '@dimkatet/hdr-image-renderer'
-import { HDRImage, type HDRImageHandle, type UseViewportOptions } from '@dimkatet/hdr-image-renderer/react'
+import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react'
 
 interface ImageCanvasProps {
   image: LinearImageData | null
@@ -30,14 +30,9 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
 
   // Update zoom display only when animation ends (avoids 60fps re-renders)
   const handleAnimationEnd = useCallback((viewport: ViewportState) => {
+    console.log('[ImageCanvas] Animation ended. Zoom:', viewport.zoom)
     setZoom(viewport.zoom)
   }, [])
-
-  // Memoize zoomable options to avoid re-attaching listeners
-  const zoomableOptions: UseViewportOptions = useMemo(() => ({
-    enabled: true,
-    onAnimationEnd: handleAnimationEnd,
-  }), [handleAnimationEnd])
 
   // Button style
   const btnStyle: React.CSSProperties = {
@@ -83,7 +78,16 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         }}
         onLoad={handleLoad}
         onError={handleError}
-        zoomable={zoomableOptions}
+        interactions={{
+          wheel: true,
+          drag: true,
+          touch: true,
+          minZoom: 0.5,
+          maxZoom: 20,
+          wheelSensitivity: 0.001,
+          animationSpeed: 0.15,
+        }}
+        onAnimationEnd={handleAnimationEnd}
         style={{
           display: "block",
           height: "60vh",

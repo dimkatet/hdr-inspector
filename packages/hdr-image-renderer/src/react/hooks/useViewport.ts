@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { HDRCanvas } from "../../HDRCanvas";
-import type { ViewportState, ViewportConfig } from "../../types";
+import type { ViewportState, ViewportConfig, InteractionConfig } from "../../types";
 
-export interface UseViewportOptions extends ViewportConfig {
+export interface UseViewportOptions extends ViewportConfig, InteractionConfig {
   /** Enable zoom/pan interactions */
   enabled?: boolean;
   /** Callback when viewport changes (fires on every frame during animation) */
@@ -48,7 +48,16 @@ export function useViewport(
       onAnimationEnd,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, instanceRef, onViewportChange, onAnimationEnd, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.wheelSensitivity, viewportConfig.animationSpeed]);
+  }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.wheelSensitivity, viewportConfig.animationSpeed]);
+
+  // Update callbacks when they change (without re-attaching interactions)
+  useEffect(() => {
+    const canvas = instanceRef.current;
+    if (!canvas) return;
+
+    // Update callbacks on viewport controller via HDRCanvas method
+    canvas.setViewportCallbacks(onViewportChange, onAnimationEnd);
+  }, [instanceRef, onViewportChange, onAnimationEnd]);
 
   // Reset function
   const resetViewport = useCallback(() => {

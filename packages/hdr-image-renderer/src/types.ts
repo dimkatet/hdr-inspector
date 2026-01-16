@@ -110,9 +110,21 @@ export interface ImageInfo {
 }
 
 /**
+ * Configuration for which interactions are enabled
+ */
+export interface InteractionConfig {
+  /** Enable mouse wheel zoom (default: true) */
+  wheel?: boolean
+  /** Enable mouse drag pan (default: true) */
+  drag?: boolean
+  /** Enable touch gestures (pinch, drag, double-tap) (default: true) */
+  touch?: boolean
+}
+
+/**
  * Options for attachInteractions()
  */
-export interface InteractionOptions extends ViewportConfig {
+export interface InteractionOptions extends ViewportConfig, InteractionConfig {
   /** Callback when viewport changes (fires on every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void
   /** Callback when animation completes (fires once per animation) */

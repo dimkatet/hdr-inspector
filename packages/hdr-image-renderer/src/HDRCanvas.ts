@@ -275,6 +275,18 @@ export class HDRCanvas {
     this.viewportController.updateConfig(config)
   }
 
+  /**
+   * Set viewport change callbacks
+   * @param onViewportChange - Callback for every frame during animation
+   * @param onAnimationEnd - Callback when animation completes
+   */
+  setViewportCallbacks(
+    onViewportChange?: ((state: ViewportState) => void) | null,
+    onAnimationEnd?: ((state: ViewportState) => void) | null
+  ): void {
+    this.viewportController.setCallbacks(onViewportChange, onAnimationEnd)
+  }
+
   // ============================================================
   // Interactions
   // ============================================================
@@ -285,7 +297,7 @@ export class HDRCanvas {
    * @returns Cleanup function to detach all listeners
    */
   attachInteractions(options: InteractionOptions = {}): () => void {
-    const { onViewportChange, onAnimationEnd, ...viewportConfig } = options
+    const { onViewportChange, onAnimationEnd, wheel, drag, touch, ...viewportConfig } = options
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
@@ -305,16 +317,20 @@ export class HDRCanvas {
       this.viewportController.setAnimationEndCallback(onAnimationEnd)
     }
 
-    // Create interaction handler
-    const handler = new InteractionHandler(this.canvas, {
-      onWheelZoom: (deltaY, cursorX, cursorY) =>
-        this.viewportController.applyWheelZoom(deltaY, cursorX, cursorY),
-      onDragPan: (deltaX, deltaY) =>
-        this.viewportController.applyDragPan(deltaX, deltaY),
-      onReset: () => this.viewportController.resetAnimated(),
-      onPinchZoom: (scaleDelta, centerX, centerY) =>
-        this.viewportController.applyPinchZoom(scaleDelta, centerX, centerY),
-    })
+    // Create interaction handler with config
+    const handler = new InteractionHandler(
+      this.canvas,
+      {
+        onWheelZoom: (deltaY, cursorX, cursorY) =>
+          this.viewportController.applyWheelZoom(deltaY, cursorX, cursorY),
+        onDragPan: (deltaX, deltaY) =>
+          this.viewportController.applyDragPan(deltaX, deltaY),
+        onReset: () => this.viewportController.resetAnimated(),
+        onPinchZoom: (scaleDelta, centerX, centerY) =>
+          this.viewportController.applyPinchZoom(scaleDelta, centerX, centerY),
+      },
+      { wheel, drag, touch }
+    )
 
     const detach = handler.attach()
 

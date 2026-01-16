@@ -2,7 +2,7 @@
 // Thin wrapper around HDRCanvas class with composable hooks
 
 import { useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import type { HDRCanvasOptions, LinearImageData, ViewportState } from "../types";
+import type { HDRCanvasOptions, LinearImageData, ViewportState, InteractionConfig, ViewportConfig } from "../types";
 import {
   useHDRCanvas,
   useImageLoader,
@@ -11,6 +11,32 @@ import {
   type UseViewportOptions,
   type ImageInfo,
 } from "./hooks";
+
+/**
+ * Configuration for interactions - combines which interactions are enabled
+ * and how the viewport behaves
+ *
+ * @example
+ * // Enable all interactions with defaults
+ * interactions={true}
+ *
+ * @example
+ * // Enable specific interactions only
+ * interactions={{ wheel: true, drag: false, touch: true }}
+ *
+ * @example
+ * // Enable interactions with custom viewport config
+ * interactions={{
+ *   wheel: true,
+ *   drag: true,
+ *   touch: true,
+ *   minZoom: 0.5,
+ *   maxZoom: 20,
+ *   wheelSensitivity: 0.002,
+ *   animationSpeed: 0.2,
+ * }}
+ */
+export type InteractionsConfig = InteractionConfig & ViewportConfig;
 
 /**
  * Imperative handle exposed via ref
@@ -37,7 +63,7 @@ export interface HDRImageHandle {
 export interface HDRImageProps
   extends Omit<
     React.CanvasHTMLAttributes<HTMLCanvasElement>,
-    "onLoad" | "onError"
+    "onLoad" | "onError" | "onAnimationEnd" | "onViewportChange"
   > {
   /** Image data or file to display */
   image?: LinearImageData | File;
@@ -47,8 +73,12 @@ export interface HDRImageProps
   onLoad?: (info: ImageInfo) => void;
   /** Callback when an error occurs */
   onError?: (error: Error) => void;
-  /** Enable zoom/pan interactions */
-  zoomable?: boolean | UseViewportOptions;
+  /** Enable/configure zoom/pan interactions (wheel, drag, touch, minZoom, maxZoom, etc.) */
+  interactions?: boolean | InteractionsConfig;
+  /** Callback when viewport changes (fires every frame during animation) */
+  onViewportChange?: (viewport: ViewportState) => void;
+  /** Callback when animation completes (fires once per animation) */
+  onAnimationEnd?: (viewport: ViewportState) => void;
   /** Auto-adjust canvas aspect ratio to match loaded image */
   fitToImage?: boolean;
 }
@@ -60,7 +90,9 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
       options,
       onLoad,
       onError,
-      zoomable = false,
+      interactions = false,
+      onViewportChange,
+      onAnimationEnd,
       fitToImage = false,
       className,
       style,
@@ -109,7 +141,9 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
 
     // Setup zoom/pan if enabled
     const viewportOptions: UseViewportOptions =
-      typeof zoomable === "boolean" ? { enabled: zoomable } : zoomable;
+      typeof interactions === "boolean"
+        ? { enabled: interactions, onViewportChange, onAnimationEnd }
+        : { enabled: true, ...interactions, onViewportChange, onAnimationEnd };
 
     useViewport(instanceRef, canvasRef, viewportOptions);
 
