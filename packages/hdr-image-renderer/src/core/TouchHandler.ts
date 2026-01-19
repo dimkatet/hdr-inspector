@@ -1,41 +1,29 @@
 /**
- * PointerHandler - DOM event handling for pointer-based canvas interactions
+ * TouchHandler - Touch event handling for canvas interactions
  *
- * Handles mouse and touch events, converting raw DOM events to normalized callbacks.
- * Platform-specific code is isolated here, keeping other classes pure.
+ * Handles touch gestures: single-finger pan, two-finger pinch zoom, double-tap reset.
+ * Converts raw touch events to normalized callbacks for viewport control.
  */
 
-export interface PointerCallbacks {
-  /** Called on wheel zoom. zoomDelta: calculated zoom change, cursorX/Y: normalized [0,1] */
-  onWheelZoom: (zoomDelta: number, cursorX: number, cursorY: number) => void;
-  /** Called on drag pan. deltaX/Y: normalized movement */
-  onDragPan: (deltaX: number, deltaY: number) => void;
-  /** Called on double-click or double-tap (reset) */
-  onReset: () => void;
+export interface TouchCallbacks {
+  /** Called on single-finger pan. deltaX/Y: normalized movement */
+  onPan: (deltaX: number, deltaY: number) => void;
   /** Called on pinch zoom. scaleDelta: multiplier, centerX/Y: normalized [0,1] */
-  onPinchZoom?: (scaleDelta: number, centerX: number, centerY: number) => void;
+  onPinchZoom: (scaleDelta: number, centerX: number, centerY: number) => void;
+  /** Called on double-tap (reset) */
+  onReset: () => void;
 }
 
-export interface PointerHandlerConfig {
-  /** Enable mouse wheel zoom (default: true) */
-  wheel?: boolean;
-  /** Enable mouse drag pan (default: true) */
-  drag?: boolean;
+export interface TouchHandlerConfig {
   /** Enable touch gestures (default: true) */
-  touch?: boolean;
-  /** Wheel zoom sensitivity (default: 0.001). Note: prefer using wheel as object for new code */
-  wheelSensitivity?: number;
+  enabled?: boolean;
 }
 
-export class PointerHandler {
+export class TouchHandler {
   private canvas: HTMLCanvasElement;
-  private callbacks: PointerCallbacks;
-  private config: Required<PointerHandlerConfig>;
+  private callbacks: TouchCallbacks;
+  private config: Required<TouchHandlerConfig>;
   private attached = false;
-
-  // Mouse drag state
-  private isDragging = false;
-  private lastPos = { x: 0, y: 0 };
 
   // Touch state
   private lastTouchPos: { x: number; y: number } | null = null;
@@ -48,35 +36,22 @@ export class PointerHandler {
   private static readonly DOUBLE_TAP_DISTANCE = 30; // px
 
   // Bound handlers (for removeEventListener)
-  private boundHandleWheel: (e: WheelEvent) => void;
-  private boundHandleMouseDown: (e: MouseEvent) => void;
-  private boundHandleMouseMove: (e: MouseEvent) => void;
-  private boundHandleMouseUp: () => void;
-  private boundHandleDblClick: (e: MouseEvent) => void;
   private boundHandleTouchStart: (e: TouchEvent) => void;
   private boundHandleTouchMove: (e: TouchEvent) => void;
   private boundHandleTouchEnd: (e: TouchEvent) => void;
 
   constructor(
     canvas: HTMLCanvasElement,
-    callbacks: PointerCallbacks,
-    config: PointerHandlerConfig = {}
+    callbacks: TouchCallbacks,
+    config: TouchHandlerConfig = {}
   ) {
     this.canvas = canvas;
     this.callbacks = callbacks;
     this.config = {
-      wheel: config.wheel ?? true,
-      drag: config.drag ?? true,
-      touch: config.touch ?? true,
-      wheelSensitivity: config.wheelSensitivity ?? 0.001,
+      enabled: config.enabled ?? true,
     };
 
     // Bind handlers once
-    this.boundHandleWheel = this.handleWheel.bind(this);
-    this.boundHandleMouseDown = this.handleMouseDown.bind(this);
-    this.boundHandleMouseMove = this.handleMouseMove.bind(this);
-    this.boundHandleMouseUp = this.handleMouseUp.bind(this);
-    this.boundHandleDblClick = this.handleDblClick.bind(this);
     this.boundHandleTouchStart = this.handleTouchStart.bind(this);
     this.boundHandleTouchMove = this.handleTouchMove.bind(this);
     this.boundHandleTouchEnd = this.handleTouchEnd.bind(this);
@@ -91,17 +66,7 @@ export class PointerHandler {
       return () => this.detach();
     }
 
-    // Mouse events (wheel and drag)
-    if (this.config.wheel) {
-      this.canvas.addEventListener('wheel', this.boundHandleWheel, { passive: false });
-    }
-    if (this.config.drag) {
-      this.canvas.addEventListener('mousedown', this.boundHandleMouseDown);
-      this.canvas.addEventListener('dblclick', this.boundHandleDblClick);
-    }
-
-    // Touch events
-    if (this.config.touch) {
+    if (this.config.enabled) {
       this.canvas.addEventListener('touchstart', this.boundHandleTouchStart, { passive: false });
       this.canvas.addEventListener('touchmove', this.boundHandleTouchMove, { passive: false });
       this.canvas.addEventListener('touchend', this.boundHandleTouchEnd);
@@ -119,20 +84,11 @@ export class PointerHandler {
   detach(): void {
     if (!this.attached) return;
 
-    // Mouse events
-    this.canvas.removeEventListener('wheel', this.boundHandleWheel);
-    this.canvas.removeEventListener('mousedown', this.boundHandleMouseDown);
-    this.canvas.removeEventListener('dblclick', this.boundHandleDblClick);
-    document.removeEventListener('mousemove', this.boundHandleMouseMove);
-    document.removeEventListener('mouseup', this.boundHandleMouseUp);
-
-    // Touch events
     this.canvas.removeEventListener('touchstart', this.boundHandleTouchStart);
     this.canvas.removeEventListener('touchmove', this.boundHandleTouchMove);
     this.canvas.removeEventListener('touchend', this.boundHandleTouchEnd);
     this.canvas.removeEventListener('touchcancel', this.boundHandleTouchEnd);
 
-    this.isDragging = false;
     this.resetTouchState();
     this.attached = false;
   }
@@ -152,51 +108,6 @@ export class PointerHandler {
   }
 
   // ============================================================
-  // Event Handlers
-  // ============================================================
-
-  private handleWheel(e: WheelEvent): void {
-    e.preventDefault();
-    const rect = this.canvas.getBoundingClientRect();
-    const cursorX = (e.clientX - rect.left) / rect.width;
-    const cursorY = (e.clientY - rect.top) / rect.height;
-
-    // Calculate zoom delta using sensitivity
-    const zoomDelta = -e.deltaY * this.config.wheelSensitivity;
-
-    this.callbacks.onWheelZoom(zoomDelta, cursorX, cursorY);
-  }
-
-  private handleMouseDown(e: MouseEvent): void {
-    if (e.button !== 0) return; // Left click only
-    e.preventDefault();
-    this.isDragging = true;
-    this.lastPos = { x: e.clientX, y: e.clientY };
-    document.addEventListener('mousemove', this.boundHandleMouseMove);
-    document.addEventListener('mouseup', this.boundHandleMouseUp);
-  }
-
-  private handleMouseMove(e: MouseEvent): void {
-    if (!this.isDragging) return;
-    const rect = this.canvas.getBoundingClientRect();
-    const deltaX = (e.clientX - this.lastPos.x) / rect.width;
-    const deltaY = (e.clientY - this.lastPos.y) / rect.height;
-    this.lastPos = { x: e.clientX, y: e.clientY };
-    this.callbacks.onDragPan(deltaX, deltaY);
-  }
-
-  private handleMouseUp(): void {
-    this.isDragging = false;
-    document.removeEventListener('mousemove', this.boundHandleMouseMove);
-    document.removeEventListener('mouseup', this.boundHandleMouseUp);
-  }
-
-  private handleDblClick(e: MouseEvent): void {
-    e.preventDefault();
-    this.callbacks.onReset();
-  }
-
-  // ============================================================
   // Touch Event Handlers
   // ============================================================
 
@@ -212,9 +123,9 @@ export class PointerHandler {
       const now = Date.now();
       if (
         this.lastTapPos &&
-        now - this.lastTapTime < PointerHandler.DOUBLE_TAP_DELAY &&
+        now - this.lastTapTime < TouchHandler.DOUBLE_TAP_DELAY &&
         this.getDistance(this.lastTapPos, { x: touch.clientX, y: touch.clientY }) <
-          PointerHandler.DOUBLE_TAP_DISTANCE
+          TouchHandler.DOUBLE_TAP_DISTANCE
       ) {
         // Double-tap detected
         this.callbacks.onReset();
@@ -244,8 +155,8 @@ export class PointerHandler {
       const deltaX = (touch.clientX - this.lastTouchPos.x) / rect.width;
       const deltaY = (touch.clientY - this.lastTouchPos.y) / rect.height;
       this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
-      this.callbacks.onDragPan(deltaX, deltaY);
-    } else if (e.touches.length === 2 && this.callbacks.onPinchZoom) {
+      this.callbacks.onPan(deltaX, deltaY);
+    } else if (e.touches.length === 2) {
       // Two finger pinch zoom
       const currentDistance = this.getPinchDistance(e.touches);
 

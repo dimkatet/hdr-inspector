@@ -7,7 +7,8 @@
 
 import { throttle } from 'throttle-debounce';
 import { KeyboardHandler } from './core/KeyboardHandler';
-import { PointerHandler } from './core/PointerHandler';
+import { MouseHandler } from './core/MouseHandler';
+import { TouchHandler } from './core/TouchHandler';
 import { ViewportController } from './core/ViewportController';
 import { decodeRadianceHDR } from './decoders';
 import { WebGPURenderer } from './renderer';
@@ -340,7 +341,7 @@ export class HDRCanvas {
   // ============================================================
 
   /**
-   * Attach pointer and keyboard interactions for zoom and pan.
+   * Attach mouse, touch, and keyboard interactions for zoom and pan.
    * @param options - Interaction options including viewport config and callbacks
    * @returns Cleanup function to detach all listeners
    */
@@ -356,8 +357,8 @@ export class HDRCanvas {
     const wheelEnabled = typeof wheel === 'boolean' ? wheel : (wheel?.enabled ?? true);
     const wheelSensitivity = typeof wheel === 'object' ? wheel.sensitivity : undefined;
 
-    // Create pointer handler with config
-    const pointerHandler = new PointerHandler(
+    // Create mouse handler with config
+    const mouseHandler = new MouseHandler(
       this.canvas,
       {
         onWheelZoom: (zoomDelta, cursorX, cursorY) =>
@@ -374,6 +375,20 @@ export class HDRCanvas {
             deltaY,
           }),
         onReset: () => this.viewportController.applyMutation({ type: 'reset' }),
+      },
+      { wheel: wheelEnabled, drag, wheelSensitivity }
+    );
+
+    // Create touch handler with config
+    const touchHandler = new TouchHandler(
+      this.canvas,
+      {
+        onPan: (deltaX, deltaY) =>
+          this.viewportController.applyMutation({
+            type: 'pan.drag',
+            deltaX,
+            deltaY,
+          }),
         onPinchZoom: (scaleDelta, centerX, centerY) =>
           this.viewportController.applyMutation({
             type: 'zoom.pinch',
@@ -381,8 +396,9 @@ export class HDRCanvas {
             cx: centerX,
             cy: centerY,
           }),
+        onReset: () => this.viewportController.applyMutation({ type: 'reset' }),
       },
-      { wheel: wheelEnabled, drag, touch, wheelSensitivity }
+      { enabled: touch }
     );
 
     // Create keyboard handler with config
@@ -404,12 +420,14 @@ export class HDRCanvas {
       typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
     );
 
-    const detachPointer = pointerHandler.attach();
+    const detachMouse = mouseHandler.attach();
+    const detachTouch = touchHandler.attach();
     const detachKeyboard = keyboardHandler.attach();
 
     // Return cleanup function
     return () => {
-      detachPointer();
+      detachMouse();
+      detachTouch();
       detachKeyboard();
     };
   }

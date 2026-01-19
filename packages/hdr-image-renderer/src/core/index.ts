@@ -21,5 +21,6 @@ export {
 } from './hdr-capabilities';
 
 export { ViewportController } from './ViewportController';
-export { PointerHandler, type PointerCallbacks } from './PointerHandler';
+export { MouseHandler, type MouseCallbacks } from './MouseHandler';
+export { TouchHandler, type TouchCallbacks } from './TouchHandler';
 export { KeyboardHandler, type KeyboardCallbacks } from './KeyboardHandler';

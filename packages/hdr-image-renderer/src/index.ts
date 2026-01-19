@@ -6,10 +6,12 @@ export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   ViewportController,
-  PointerHandler,
+  MouseHandler,
+  TouchHandler,
   KeyboardHandler,
   type HDRCapabilities,
-  type PointerCallbacks,
+  type MouseCallbacks,
+  type TouchCallbacks,
   type KeyboardCallbacks,
 } from './core';
 export type {

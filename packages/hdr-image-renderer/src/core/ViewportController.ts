@@ -348,12 +348,9 @@ export class ViewportController {
       const easedProgress = easing(progress);
 
       const startState = this.animationStartState;
-      const newZoom =
-        startState.zoom + (this.target.zoom - startState.zoom) * easedProgress;
-      const newPanX =
-        startState.panX + (this.target.panX - startState.panX) * easedProgress;
-      const newPanY =
-        startState.panY + (this.target.panY - startState.panY) * easedProgress;
+      const newZoom = startState.zoom + (this.target.zoom - startState.zoom) * easedProgress;
+      const newPanX = startState.panX + (this.target.panX - startState.panX) * easedProgress;
+      const newPanY = startState.panY + (this.target.panY - startState.panY) * easedProgress;
 
       this.state = {
         zoom: newZoom,
