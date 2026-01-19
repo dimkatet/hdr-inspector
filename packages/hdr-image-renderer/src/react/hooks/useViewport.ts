@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { HDRCanvas } from "../../HDRCanvas";
 import type { ViewportState, ViewportConfig, PointerConfig, KeyboardConfig } from "../../types";
 
@@ -9,8 +9,6 @@ export interface UseViewportOptions extends ViewportConfig, PointerConfig {
   keyboard?: boolean | KeyboardConfig;
   /** Callback when viewport changes (fires on every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void;
-  /** Callback when animation completes (fires once per animation) */
-  onAnimationEnd?: (viewport: ViewportState) => void;
 }
 
 export interface UseViewportResult {
@@ -29,7 +27,7 @@ export function useViewport(
   _canvasRef: React.RefObject<HTMLCanvasElement | null>,
   options: UseViewportOptions = {}
 ): UseViewportResult {
-  const { enabled = false, onViewportChange, onAnimationEnd, keyboard, ...viewportConfig } = options;
+  const { enabled = false, onViewportChange, keyboard, ...viewportConfig } = options;
 
   const [viewport, setViewport] = useState<ViewportState>({
     zoom: 1,
@@ -37,32 +35,34 @@ export function useViewport(
     panY: 0,
   });
 
+  // Store callback in ref to avoid re-subscribing
+  const onViewportChangeRef = useRef(onViewportChange);
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange;
+  }, [onViewportChange]);
+
   // Attach interactions when enabled
   useEffect(() => {
     if (!enabled || !instanceRef.current) {
       return;
     }
 
-    return instanceRef.current.attachInteractions({
+    const detachInteractions = instanceRef.current.attachInteractions({
       ...viewportConfig,
       keyboard,
-      onViewportChange: (v) => {
-        setViewport(v);
-        onViewportChange?.(v);
-      },
-      onAnimationEnd,
     });
+
+    const unsubscribeViewport = instanceRef.current.onViewportChange((v) => {
+      setViewport(v);
+      onViewportChangeRef.current?.(v);
+    });
+
+    return () => {
+      detachInteractions();
+      unsubscribeViewport();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.animationSpeed, keyboard]);
-
-  // Update callbacks when they change (without re-attaching interactions)
-  useEffect(() => {
-    const canvas = instanceRef.current;
-    if (!canvas) return;
-
-    // Update callbacks on viewport controller via HDRCanvas method
-    canvas.setViewportCallbacks(onViewportChange, onAnimationEnd);
-  }, [instanceRef, onViewportChange, onAnimationEnd]);
 
   // Reset function
   const resetViewport = useCallback(() => {

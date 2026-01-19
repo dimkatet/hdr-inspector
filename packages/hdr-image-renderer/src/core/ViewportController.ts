@@ -5,13 +5,19 @@
  * Can be used standalone or integrated into HDRCanvas.
  */
 
-import type { ViewportState, ViewportConfig } from '../types'
+import type {
+  ViewportState,
+  ViewportConfig,
+  ViewportMutation,
+  MutationListener,
+  UpdateListener,
+} from "../types";
 
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
   minZoom: 0.1,
   maxZoom: 10,
   animationSpeed: 0.15,
-}
+};
 
 /**
  * Clamp pan values to keep image within viewport bounds.
@@ -19,260 +25,323 @@ const DEFAULT_CONFIG: Required<ViewportConfig> = {
  * At zoom > 1, pan is limited so image edges don't go past viewport center.
  */
 function clampPan(pan: number, zoom: number): number {
-  const maxPan = Math.max(0, (1 - 1 / zoom) / 2)
-  return Math.max(-maxPan, Math.min(maxPan, pan))
+  const maxPan = Math.max(0, (1 - 1 / zoom) / 2);
+  return Math.max(-maxPan, Math.min(maxPan, pan));
 }
 
 export class ViewportController {
-  private state: ViewportState = { zoom: 1, panX: 0, panY: 0 }
-  private target: ViewportState = { zoom: 1, panX: 0, panY: 0 }
-  private animationId: number | null = null
-  private config: Required<ViewportConfig>
-  private onUpdate: ((state: ViewportState) => void) | null = null
-  private onAnimationEnd: ((state: ViewportState) => void) | null = null
+  private state: ViewportState = { zoom: 1, panX: 0, panY: 0 };
+  private target: ViewportState = { zoom: 1, panX: 0, panY: 0 };
+  private animationId: number | null = null;
+  private config: Required<ViewportConfig>;
+  private mutationListeners = new Set<MutationListener>();
+  private updateListeners = new Set<UpdateListener>();
 
   constructor(config: Partial<ViewportConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config }
+    this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
   /**
    * Get current viewport state
    */
   getState(): ViewportState {
-    return { ...this.state }
+    return { ...this.state };
   }
 
   /**
    * Get target viewport state (where animation is heading)
    */
   getTarget(): ViewportState {
-    return { ...this.target }
+    return { ...this.target };
   }
 
   /**
-   * Set viewport state directly (no animation)
+   * Notify all mutation listeners about a viewport change intention.
+   * Called before animation starts, with the target state.
    */
-  setState(viewport: Partial<ViewportState>): void {
-    if (viewport.zoom !== undefined) {
-      const zoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, viewport.zoom))
-      this.state.zoom = zoom
-      this.target.zoom = zoom
+  private emitMutation(
+    mutation: ViewportMutation,
+    prev: ViewportState,
+    nextTarget: ViewportState,
+  ): void {
+    for (const listener of this.mutationListeners) {
+      listener(mutation, prev, nextTarget);
     }
-    if (viewport.panX !== undefined) {
-      this.state.panX = clampPan(viewport.panX, this.state.zoom)
-      this.target.panX = this.state.panX
+  }
+
+  /**
+   * Notify all update listeners about current viewport state.
+   * Called on every animation frame and when state changes instantly.
+   */
+  private emitUpdate(state: ViewportState): void {
+    for (const listener of this.updateListeners) {
+      listener(state);
     }
-    if (viewport.panY !== undefined) {
-      this.state.panY = clampPan(viewport.panY, this.state.zoom)
-      this.target.panY = this.state.panY
+  }
+
+  /**
+   * Apply a viewport mutation (zoom, pan, reset).
+   * This is the main entry point for all viewport changes.
+   *
+   * Flow:
+   * 1. Compute new target state from mutation
+   * 2. Emit mutation event (for immediate UI updates)
+   * 3. Start transition animation (or apply instantly if transitionSpeed=0)
+   */
+  applyMutation(mutation: ViewportMutation): void {
+    const prevTarget = this.getTarget();
+    this.target = this.processMutation(mutation);
+
+    this.emitMutation(mutation, prevTarget, this.getTarget());
+
+    this.startTransition(mutation);
+  }
+
+  /**
+   * Route mutation to appropriate compute method.
+   * Each compute method is a pure function that returns the new target state.
+   */
+  private processMutation(mutation: ViewportMutation): ViewportState {
+    switch (mutation.type) {
+      case "zoom.in":
+        return this.computeZoomIn(mutation.factor);
+      case "zoom.out":
+        return this.computeZoomOut(mutation.factor);
+      case "zoom.to":
+        return this.computeZoomTo(mutation.factor);
+      case "zoom.wheel":
+        return this.computeWheelZoom(
+          mutation.zoomDelta,
+          mutation.cursorX,
+          mutation.cursorY,
+        );
+      case "zoom.pinch":
+        return this.computePinchZoom(
+          mutation.scale,
+          mutation.cx,
+          mutation.cy,
+        );
+      case "pan.drag":
+        return this.computeDragPan(mutation.deltaX, mutation.deltaY);
+      case "reset":
+        return this.computeReset();
+      default:
+        return { ...this.getTarget() };
     }
-    this.onUpdate?.(this.state)
   }
 
   /**
-   * Reset viewport to default (zoom 1, no pan)
+   * Subscribe to mutation events.
+   * Mutations fire once when a viewport change is requested, before animation.
+   * Useful for UI updates that should reflect the target state immediately.
+   * @returns Unsubscribe function
    */
-  reset(): void {
-    this.state = { zoom: 1, panX: 0, panY: 0 }
-    this.target = { zoom: 1, panX: 0, panY: 0 }
-    this.stopAnimation()
-    this.onUpdate?.(this.state)
+  onMutation(listener: MutationListener): () => void {
+    this.mutationListeners.add(listener);
+
+    return () => {
+      this.mutationListeners.delete(listener);
+    };
   }
 
   /**
-   * Reset with animation
+   * Subscribe to state update events.
+   * Updates fire on every animation frame during transitions.
+   * Useful for rendering that needs smooth interpolated values.
+   * @returns Unsubscribe function
    */
-  resetAnimated(): void {
-    this.target = { zoom: 1, panX: 0, panY: 0 }
-    this.startAnimation()
+  onUpdate(listener: UpdateListener): () => void {
+    this.updateListeners.add(listener);
+
+    return () => {
+      this.updateListeners.delete(listener);
+    };
   }
 
   /**
-   * Zoom in by a factor (centered)
-   * @param factor - Zoom multiplier (default: 2)
+   * Compute reset state (zoom 1, no pan)
    */
-  zoomIn(factor: number = 2): void {
-    const newZoom = Math.min(this.config.maxZoom, this.target.zoom * factor)
-    this.target = { ...this.target, zoom: newZoom }
-    this.startAnimation()
+  private computeReset(): ViewportState {
+    return { zoom: 1, panX: 0, panY: 0 };
   }
 
   /**
-   * Zoom out by a factor (centered)
-   * @param factor - Zoom divisor (default: 2)
+   * Compute zoom in by a factor (centered)
    */
-  zoomOut(factor: number = 2): void {
-    const newZoom = Math.max(this.config.minZoom, this.target.zoom / factor)
-    // Clamp pan when zooming out
-    this.target = {
+  private computeZoomIn(factor: number = 2): ViewportState {
+    const prevTarget = this.getTarget();
+    const newZoom = Math.min(this.config.maxZoom, prevTarget.zoom * factor);
+    return { ...prevTarget, zoom: newZoom };
+  }
+
+  /**
+   * Compute zoom out by a factor (centered)
+   */
+  private computeZoomOut(factor: number = 2): ViewportState {
+    const prevTarget = this.getTarget();
+    const newZoom = Math.max(this.config.minZoom, prevTarget.zoom / factor);
+    return {
+      ...prevTarget,
       zoom: newZoom,
-      panX: clampPan(this.target.panX, newZoom),
-      panY: clampPan(this.target.panY, newZoom),
-    }
-    this.startAnimation()
+      panX: clampPan(prevTarget.panX, newZoom),
+      panY: clampPan(prevTarget.panY, newZoom),
+    };
   }
 
   /**
-   * Set zoom to specific level with animation (centered)
-   * @param zoom - Target zoom level
+   * Compute zoom to specific level (centered)
    */
-  zoomTo(zoom: number): void {
-    const newZoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, zoom))
-    this.target = {
-      zoom: newZoom,
-      panX: clampPan(this.target.panX, newZoom),
-      panY: clampPan(this.target.panY, newZoom),
-    }
-    this.startAnimation()
-  }
-
-  /**
-   * Apply wheel zoom centered on cursor position
-   * @param zoomDelta - Pre-calculated zoom delta (from PointerHandler)
-   * @param cursorX - Cursor X in normalized canvas coords [0, 1]
-   * @param cursorY - Cursor Y in normalized canvas coords [0, 1]
-   */
-  applyWheelZoom(zoomDelta: number, cursorX: number, cursorY: number): void {
-    const prevTarget = this.target
+  private computeZoomTo(zoom: number): ViewportState {
+    const prevTarget = this.getTarget();
     const newZoom = Math.max(
       this.config.minZoom,
-      Math.min(this.config.maxZoom, prevTarget.zoom * (1 + zoomDelta))
-    )
+      Math.min(this.config.maxZoom, zoom),
+    );
+    return {
+      ...prevTarget,
+      zoom: newZoom,
+      panX: clampPan(prevTarget.panX, newZoom),
+      panY: clampPan(prevTarget.panY, newZoom),
+    };
+  }
 
-    // Zoom toward cursor position
-    const zoomRatio = newZoom / prevTarget.zoom
+  /**
+   * Compute wheel zoom centered on cursor position
+   */
+  private computeWheelZoom(
+    zoomDelta: number,
+    cursorX: number,
+    cursorY: number,
+  ): ViewportState {
+    const prevTarget = this.getTarget();
+    const newZoom = Math.max(
+      this.config.minZoom,
+      Math.min(this.config.maxZoom, prevTarget.zoom * (1 + zoomDelta)),
+    );
 
-    // Mouse position relative to image center (in UV space)
-    const mouseOffsetX = cursorX - 0.5
-    const mouseOffsetY = cursorY - 0.5
+    const zoomRatio = newZoom / prevTarget.zoom;
+    const mouseOffsetX = cursorX - 0.5;
+    const mouseOffsetY = cursorY - 0.5;
 
-    // Adjust pan to keep the point under cursor stationary
-    const newPanX = prevTarget.panX + (mouseOffsetX * (1 - 1 / zoomRatio)) / newZoom
-    const newPanY = prevTarget.panY + (mouseOffsetY * (1 - 1 / zoomRatio)) / newZoom
+    const newPanX =
+      prevTarget.panX + (mouseOffsetX * (1 - 1 / zoomRatio)) / newZoom;
+    const newPanY =
+      prevTarget.panY + (mouseOffsetY * (1 - 1 / zoomRatio)) / newZoom;
 
-    this.target = {
+    return {
+      ...prevTarget,
       zoom: newZoom,
       panX: clampPan(newPanX, newZoom),
       panY: clampPan(newPanY, newZoom),
-    }
-
-    this.startAnimation()
+    };
   }
 
   /**
-   * Apply drag pan
-   * @param deltaX - Delta X in normalized canvas coords (positive = pan right)
-   * @param deltaY - Delta Y in normalized canvas coords (positive = pan down)
+   * Compute drag pan
    */
-  applyDragPan(deltaX: number, deltaY: number): void {
-    // Pan is in image space, so divide by zoom
-    const newPanX = this.state.panX - deltaX / this.state.zoom
-    const newPanY = this.state.panY - deltaY / this.state.zoom
+  private computeDragPan(deltaX: number, deltaY: number): ViewportState {
+    const newPanX = this.state.panX - deltaX / this.state.zoom;
+    const newPanY = this.state.panY - deltaY / this.state.zoom;
 
-    this.state = {
-      ...this.state,
+    return {
+      ...this.getTarget(),
       panX: clampPan(newPanX, this.state.zoom),
       panY: clampPan(newPanY, this.state.zoom),
-    }
-    // Sync target with current state during drag (no animation)
-    this.target = { ...this.state }
-
-    this.onUpdate?.(this.state)
+    };
   }
 
   /**
-   * Apply pinch zoom centered on a point
-   * @param scaleDelta - Scale multiplier (>1 = zoom in, <1 = zoom out)
-   * @param centerX - Pinch center X in normalized canvas coords [0, 1]
-   * @param centerY - Pinch center Y in normalized canvas coords [0, 1]
+   * Compute pinch zoom centered on a point
    */
-  applyPinchZoom(scaleDelta: number, centerX: number, centerY: number): void {
+  private computePinchZoom(
+    scale: number,
+    cx: number,
+    cy: number,
+  ): ViewportState {
+    const t = { ...this.getTarget() };
     const newZoom = Math.max(
       this.config.minZoom,
-      Math.min(this.config.maxZoom, this.state.zoom * scaleDelta)
-    )
+      Math.min(this.config.maxZoom, t.zoom * scale),
+    );
+    const offsetX = cx - 0.5;
+    const offsetY = cy - 0.5;
 
-    // Zoom toward pinch center
-    const centerOffsetX = centerX - 0.5
-    const centerOffsetY = centerY - 0.5
-
-    const newPanX = this.state.panX + (centerOffsetX * (1 - 1 / scaleDelta)) / newZoom
-    const newPanY = this.state.panY + (centerOffsetY * (1 - 1 / scaleDelta)) / newZoom
-
-    // Direct update (no animation during pinch)
-    this.state = {
+    return {
+      ...t,
       zoom: newZoom,
-      panX: clampPan(newPanX, newZoom),
-      panY: clampPan(newPanY, newZoom),
+      panX: clampPan(t.panX + (offsetX * (1 - 1 / scale)) / newZoom, newZoom),
+      panY: clampPan(t.panY + (offsetY * (1 - 1 / scale)) / newZoom, newZoom),
+    };
+  }
+
+  /**
+   * Get transition speed for a mutation.
+   * Returns 0 for instant transitions (drag, pinch), or config speed for animated ones.
+   * Can be overridden per-mutation via transitionSpeed property.
+   */
+  private getTransitionSpeed(mutation: ViewportMutation): number {
+    if (mutation.transitionSpeed !== undefined) return mutation.transitionSpeed;
+
+    switch (mutation.type) {
+      case "pan.drag":
+      case "zoom.pinch":
+        return 0;
+      default:
+        return this.config.animationSpeed;
     }
-    this.target = { ...this.state }
-
-    this.onUpdate?.(this.state)
   }
 
   /**
-   * Set callback for viewport updates (fires on every frame)
+   * Start transition animation loop.
+   * Uses linear interpolation (lerp) to smoothly animate from current state to target.
+   * If transitionSpeed is 0, applies state instantly without animation.
    */
-  setUpdateCallback(callback: ((state: ViewportState) => void) | null): void {
-    this.onUpdate = callback
-  }
+  private startTransition(mutation: ViewportMutation): void {
+    const t = this.getTransitionSpeed(mutation);
 
-  /**
-   * Set callback for when animation completes (fires once per animation)
-   */
-  setAnimationEndCallback(callback: ((state: ViewportState) => void) | null): void {
-    this.onAnimationEnd = callback
-  }
+    // Instant transition
+    if (t === 0) {
+      this.state = { ...this.target };
+      this.animationId = null;
+      this.emitUpdate(this.state);
+      return;
+    }
 
-  /**
-   * Set both callbacks at once (convenience method)
-   */
-  setCallbacks(
-    onUpdate: ((state: ViewportState) => void) | null | undefined,
-    onAnimationEnd: ((state: ViewportState) => void) | null | undefined
-  ): void {
-    if (onUpdate !== undefined) this.onUpdate = onUpdate ?? null
-    if (onAnimationEnd !== undefined) this.onAnimationEnd = onAnimationEnd ?? null
-  }
-
-  /**
-   * Start animation loop
-   */
-  private startAnimation(): void {
-    if (this.animationId !== null) return
+    // Don't start new animation if one is already running
+    if (this.animationId !== null) return;
 
     const animate = () => {
-      const t = this.config.animationSpeed
-
-      // Check if we're close enough to stop
-      const dZoom = Math.abs(this.target.zoom - this.state.zoom)
-      const dPanX = Math.abs(this.target.panX - this.state.panX)
-      const dPanY = Math.abs(this.target.panY - this.state.panY)
+      // Check if we're close enough to target to stop
+      const dZoom = Math.abs(this.target.zoom - this.state.zoom);
+      const dPanX = Math.abs(this.target.panX - this.state.panX);
+      const dPanY = Math.abs(this.target.panY - this.state.panY);
 
       if (dZoom < 0.001 && dPanX < 0.0001 && dPanY < 0.0001) {
-        this.state = { ...this.target }
-        this.animationId = null
-        this.onUpdate?.(this.state)
-        this.onAnimationEnd?.(this.state)
-        return
+        this.state = { ...this.target };
+        this.animationId = null;
+        this.emitUpdate(this.state);
+        return;
       }
 
-      // Lerp toward target
-      const newZoom = this.state.zoom + (this.target.zoom - this.state.zoom) * t
-      const newPanX = this.state.panX + (this.target.panX - this.state.panX) * t
-      const newPanY = this.state.panY + (this.target.panY - this.state.panY) * t
+      // Lerp toward target (exponential ease-out)
+      const newZoom =
+        this.state.zoom + (this.target.zoom - this.state.zoom) * t;
+      const newPanX =
+        this.state.panX + (this.target.panX - this.state.panX) * t;
+      const newPanY =
+        this.state.panY + (this.target.panY - this.state.panY) * t;
 
       this.state = {
         zoom: newZoom,
         panX: clampPan(newPanX, newZoom),
         panY: clampPan(newPanY, newZoom),
-      }
+      };
 
-      this.onUpdate?.(this.state)
-      this.animationId = requestAnimationFrame(animate)
-    }
+      this.emitUpdate(this.state);
+      this.animationId = requestAnimationFrame(animate);
+    };
 
-    this.animationId = requestAnimationFrame(animate)
+    this.animationId = requestAnimationFrame(animate);
   }
 
   /**
@@ -280,8 +349,8 @@ export class ViewportController {
    */
   stopAnimation(): void {
     if (this.animationId !== null) {
-      cancelAnimationFrame(this.animationId)
-      this.animationId = null
+      cancelAnimationFrame(this.animationId);
+      this.animationId = null;
     }
   }
 
@@ -289,22 +358,22 @@ export class ViewportController {
    * Check if animation is running
    */
   isAnimating(): boolean {
-    return this.animationId !== null
+    return this.animationId !== null;
   }
 
   /**
    * Update config
    */
   updateConfig(config: Partial<ViewportConfig>): void {
-    this.config = { ...this.config, ...config }
+    this.config = { ...this.config, ...config };
   }
 
   /**
    * Cleanup
    */
   destroy(): void {
-    this.stopAnimation()
-    this.onUpdate = null
-    this.onAnimationEnd = null
+    this.stopAnimation();
+    this.mutationListeners.clear();
+    this.updateListeners.clear();
   }
 }

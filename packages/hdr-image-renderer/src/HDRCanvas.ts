@@ -5,7 +5,8 @@
  * Wraps WebGPURenderer with a simple imperative API.
  */
 
-import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState, ViewportConfig, ImageInfo, InteractionOptions } from './types'
+import type { HDRCanvasOptions, RenderState, LinearImageData, ViewportState, ViewportConfig, ImageInfo, InteractionOptions, MutationListener } from './types'
+import { throttle } from 'throttle-debounce'
 import { decodeRadianceHDR } from './decoders'
 import { WebGPURenderer } from './renderer'
 import { ViewportController } from './core/ViewportController'
@@ -33,7 +34,7 @@ export class HDRCanvas {
 
     this.renderer = new WebGPURenderer(canvas, { transparent: this.options.transparent })
     this.viewportController = new ViewportController()
-    this.viewportController.setUpdateCallback(() => this.render())
+    this.viewportController.onUpdate(() => this.render())
   }
 
   /**
@@ -163,41 +164,53 @@ export class HDRCanvas {
   }
 
   /**
-   * Set zoom level
+   * Set zoom level (instant, no animation)
    * @param zoom Zoom level (1.0 = 100%, 2.0 = 200%)
    */
   setZoom(zoom: number): void {
-    this.viewportController.setState({ zoom })
+    this.viewportController.applyMutation({
+      type: "zoom.to",
+      factor: zoom,
+      transitionSpeed: 1,
+    })
   }
 
   /**
-   * Set pan offset
+   * Set pan offset (instant, no animation)
    * @param x Pan X in normalized coordinates
    * @param y Pan Y in normalized coordinates
    */
   setPan(x: number, y: number): void {
-    this.viewportController.setState({ panX: x, panY: y })
+    this.viewportController.applyMutation({
+      type: "pan.drag",
+      deltaX: this.viewportController.getState().panX - x,
+      deltaY: this.viewportController.getState().panY - y,
+      transitionSpeed: 1,
+    })
   }
 
   /**
-   * Set complete viewport state
+   * Set complete viewport state (instant, no animation)
    */
   setViewport(viewport: Partial<ViewportState>): void {
-    this.viewportController.setState(viewport)
+    if (viewport.zoom !== undefined) {
+      this.setZoom(viewport.zoom)
+    }
+    if (viewport.panX !== undefined || viewport.panY !== undefined) {
+      const current = this.viewportController.getState()
+      this.setPan(viewport.panX ?? current.panX, viewport.panY ?? current.panY)
+    }
   }
 
   /**
    * Reset viewport to default (zoom 1, no pan)
+   * @param animated - Whether to animate the transition (default: true)
    */
-  resetViewport(): void {
-    this.viewportController.reset()
-  }
-
-  /**
-   * Reset viewport with smooth animation
-   */
-  resetViewportAnimated(): void {
-    this.viewportController.resetAnimated()
+  resetViewport(animated: boolean = true): void {
+    this.viewportController.applyMutation({
+      type: "reset",
+      transitionSpeed: animated ? undefined : 1,
+    })
   }
 
   /**
@@ -205,7 +218,10 @@ export class HDRCanvas {
    * @param factor - Zoom multiplier (default: 2)
    */
   zoomIn(factor?: number): void {
-    this.viewportController.zoomIn(factor)
+    this.viewportController.applyMutation({
+      type: "zoom.in",
+      factor,
+    })
   }
 
   /**
@@ -213,7 +229,10 @@ export class HDRCanvas {
    * @param factor - Zoom divisor (default: 2)
    */
   zoomOut(factor?: number): void {
-    this.viewportController.zoomOut(factor)
+    this.viewportController.applyMutation({
+      type: "zoom.out",
+      factor,
+    })
   }
 
   /**
@@ -221,8 +240,10 @@ export class HDRCanvas {
    * Shows the entire image with maximum size that fits
    */
   zoomToFit(): void {
-    // At zoom=1, shader does contain fit, so zoom=1 always shows full image
-    this.viewportController.zoomTo(1)
+    this.viewportController.applyMutation({
+      type: "zoom.to",
+      factor: 1,
+    })
   }
 
   /**
@@ -236,37 +257,17 @@ export class HDRCanvas {
     const canvasRect = this.canvas.getBoundingClientRect()
     if (canvasRect.width === 0 || canvasRect.height === 0) return
 
-    // At zoom=1, image is fit to canvas (contain mode)
-    // We need to calculate what zoom shows 1:1 pixels
-    // The contain transform scales image to fit, so we need to invert that
     const imageAspect = imageDims.width / imageDims.height
     const canvasAspect = canvasRect.width / canvasRect.height
 
     const fitScale = imageAspect > canvasAspect
-      ? canvasRect.width / imageDims.width   // Image is wider
-      : canvasRect.height / imageDims.height // Image is taller
+      ? canvasRect.width / imageDims.width
+      : canvasRect.height / imageDims.height
 
-    // zoom = 1 / fitScale gives us 1:1 pixel mapping
-    this.viewportController.zoomTo(1 / fitScale)
-  }
-
-  /**
-   * Apply wheel zoom centered on cursor position
-   * @param deltaY - Wheel delta (negative = zoom in)
-   * @param cursorNormX - Cursor X in normalized canvas coords [0, 1]
-   * @param cursorNormY - Cursor Y in normalized canvas coords [0, 1]
-   */
-  applyWheelZoom(deltaY: number, cursorNormX: number, cursorNormY: number): void {
-    this.viewportController.applyWheelZoom(deltaY, cursorNormX, cursorNormY)
-  }
-
-  /**
-   * Apply drag pan
-   * @param deltaNormX - Delta X in normalized canvas coords
-   * @param deltaNormY - Delta Y in normalized canvas coords
-   */
-  applyDragPan(deltaNormX: number, deltaNormY: number): void {
-    this.viewportController.applyDragPan(deltaNormX, deltaNormY)
+    this.viewportController.applyMutation({
+      type: "zoom.to",
+      factor: 1 / fitScale,
+    })
   }
 
   /**
@@ -276,16 +277,54 @@ export class HDRCanvas {
     this.viewportController.updateConfig(config)
   }
 
+  // ============================================================
+  // Event subscriptions
+  // ============================================================
+
   /**
-   * Set viewport change callbacks
-   * @param onViewportChange - Callback for every frame during animation
-   * @param onAnimationEnd - Callback when animation completes
+   * Subscribe to zoom changes (throttled for wheel/pinch events)
+   * @param callback - Called with new zoom level and full viewport state
+   * @param throttleMs - Throttle interval for frequent events (default: 100ms)
+   * @returns Unsubscribe function
    */
-  setViewportCallbacks(
-    onViewportChange?: ((state: ViewportState) => void) | null,
-    onAnimationEnd?: ((state: ViewportState) => void) | null
-  ): void {
-    this.viewportController.setCallbacks(onViewportChange, onAnimationEnd)
+  onZoom(
+    callback: (zoom: number, state: ViewportState) => void,
+    throttleMs: number = 100
+  ): () => void {
+    const throttledCallback = throttle(throttleMs, callback)
+
+    return this.viewportController.onMutation((mutation, _prev, target) => {
+      switch (mutation.type) {
+        case "zoom.in":
+        case "zoom.out":
+        case "zoom.to":
+        case "reset":
+          callback(target.zoom, target)
+          break
+        case "zoom.wheel":
+        case "zoom.pinch":
+          throttledCallback(target.zoom, target)
+          break
+      }
+    })
+  }
+
+  /**
+   * Subscribe to all viewport mutations (low-level)
+   * @param listener - Called with mutation details and state
+   * @returns Unsubscribe function
+   */
+  onMutation(listener: MutationListener): () => void {
+    return this.viewportController.onMutation(listener)
+  }
+
+  /**
+   * Subscribe to viewport state updates (fires every animation frame)
+   * @param callback - Called with current viewport state
+   * @returns Unsubscribe function
+   */
+  onViewportChange(callback: (state: ViewportState) => void): () => void {
+    return this.viewportController.onUpdate(callback)
   }
 
   // ============================================================
@@ -298,24 +337,11 @@ export class HDRCanvas {
    * @returns Cleanup function to detach all listeners
    */
   attachInteractions(options: InteractionOptions = {}): () => void {
-    const { onViewportChange, onAnimationEnd, wheel, drag, touch, keyboard, ...viewportConfig } = options
+    const { wheel, drag, touch, keyboard, ...viewportConfig } = options
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
       this.viewportController.updateConfig(viewportConfig)
-    }
-
-    // Set up viewport change callback
-    const originalUpdateCallback = this.viewportController['onUpdate']
-    this.viewportController.setUpdateCallback((state) => {
-      this.renderWithViewport(state)
-      onViewportChange?.(state)
-    })
-
-    // Set up animation end callback
-    const originalAnimationEndCallback = this.viewportController['onAnimationEnd']
-    if (onAnimationEnd) {
-      this.viewportController.setAnimationEndCallback(onAnimationEnd)
     }
 
     // Parse wheel config
@@ -327,12 +353,26 @@ export class HDRCanvas {
       this.canvas,
       {
         onWheelZoom: (zoomDelta, cursorX, cursorY) =>
-          this.viewportController.applyWheelZoom(zoomDelta, cursorX, cursorY),
+          this.viewportController.applyMutation({
+            type: "zoom.wheel",
+            zoomDelta,
+            cursorX,
+            cursorY,
+          }),
         onDragPan: (deltaX, deltaY) =>
-          this.viewportController.applyDragPan(deltaX, deltaY),
-        onReset: () => this.viewportController.resetAnimated(),
+          this.viewportController.applyMutation({
+            type: "pan.drag",
+            deltaX,
+            deltaY,
+          }),
+        onReset: () => this.viewportController.applyMutation({ type: "reset" }),
         onPinchZoom: (scaleDelta, centerX, centerY) =>
-          this.viewportController.applyPinchZoom(scaleDelta, centerX, centerY),
+          this.viewportController.applyMutation({
+            type: "zoom.pinch",
+            scale: scaleDelta,
+            cx: centerX,
+            cy: centerY,
+          }),
       },
       { wheel: wheelEnabled, drag, touch, wheelSensitivity }
     )
@@ -342,12 +382,16 @@ export class HDRCanvas {
       this.canvas,
       {
         onPan: (deltaX, deltaY) =>
-          this.viewportController.applyDragPan(deltaX, deltaY),
+          this.viewportController.applyMutation({
+            type: "pan.drag",
+            deltaX,
+            deltaY,
+          }),
         onZoomIn: () => this.zoomIn(),
         onZoomOut: () => this.zoomOut(),
         onZoomToFit: () => this.zoomToFit(),
         onZoomToActual: () => this.zoomToActual(),
-        onReset: () => this.viewportController.resetAnimated(),
+        onReset: () => this.viewportController.applyMutation({ type: "reset", transitionSpeed: 1 }),
       },
       typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
     )
@@ -359,8 +403,6 @@ export class HDRCanvas {
     return () => {
       detachPointer()
       detachKeyboard()
-      this.viewportController.setUpdateCallback(originalUpdateCallback)
-      this.viewportController.setAnimationEndCallback(originalAnimationEndCallback)
     }
   }
 

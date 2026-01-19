@@ -1,15 +1,23 @@
 // React component wrapper
 // Thin wrapper around HDRCanvas class with composable hooks
 
-import { useState, useCallback, forwardRef, useImperativeHandle } from "react";
-import type { HDRCanvasOptions, LinearImageData, ViewportState, PointerConfig, ViewportConfig, KeyboardConfig } from "../types";
+import { forwardRef, useCallback, useImperativeHandle, useState } from "react";
+import type {
+  HDRCanvasOptions,
+  KeyboardConfig,
+  LinearImageData,
+  PointerConfig,
+  ViewportConfig,
+  ViewportState,
+} from "../types";
 import {
   useHDRCanvas,
   useImageLoader,
   useRenderOptions,
   useViewport,
-  type UseViewportOptions,
+  useZoomCallback,
   type ImageInfo,
+  type UseViewportOptions,
 } from "./hooks";
 
 /**
@@ -49,10 +57,11 @@ import {
  *   }
  * }}
  */
-export type InteractionsConfig = PointerConfig & ViewportConfig & {
-  /** Keyboard control configuration (true for defaults, object for custom config) */
-  keyboard?: boolean | KeyboardConfig;
-};
+export type InteractionsConfig = PointerConfig &
+  ViewportConfig & {
+    /** Keyboard control configuration (true for defaults, object for custom config) */
+    keyboard?: boolean | KeyboardConfig;
+  };
 
 /**
  * Imperative handle exposed via ref
@@ -76,11 +85,10 @@ export interface HDRImageHandle {
   getCanvas: () => import("../HDRCanvas").HDRCanvas | null;
 }
 
-export interface HDRImageProps
-  extends Omit<
-    React.CanvasHTMLAttributes<HTMLCanvasElement>,
-    "onLoad" | "onError" | "onAnimationEnd" | "onViewportChange"
-  > {
+export interface HDRImageProps extends Omit<
+  React.CanvasHTMLAttributes<HTMLCanvasElement>,
+  "onLoad" | "onError" | "onViewportChange"
+> {
   /** Image data or file to display */
   image?: LinearImageData | File;
   /** Render options (exposure, toneMapping, etc.) */
@@ -93,8 +101,8 @@ export interface HDRImageProps
   interactions?: boolean | InteractionsConfig;
   /** Callback when viewport changes (fires every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void;
-  /** Callback when animation completes (fires once per animation) */
-  onAnimationEnd?: (viewport: ViewportState) => void;
+  /** Callback when zoom changes (throttled for wheel/pinch, immediate for buttons) */
+  onZoom?: (zoom: number, state: ViewportState) => void;
   /** Auto-adjust canvas aspect ratio to match loaded image */
   fitToImage?: boolean;
 }
@@ -108,18 +116,21 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
       onError,
       interactions = false,
       onViewportChange,
-      onAnimationEnd,
+      onZoom,
       fitToImage = false,
       className,
       style,
       ...rest
     },
-    ref
+    ref,
   ) {
     const [aspectRatio, setAspectRatio] = useState<number | undefined>();
 
     // Initialize HDRCanvas instance
     const { canvasRef, instanceRef } = useHDRCanvas(options, onError);
+
+    // Subscribe to zoom changes
+    useZoomCallback(instanceRef, onZoom);
 
     // Expose imperative handle
     useImperativeHandle(
@@ -129,13 +140,13 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
         zoomOut: (factor?: number) => instanceRef.current?.zoomOut(factor),
         zoomToFit: () => instanceRef.current?.zoomToFit(),
         zoomToActual: () => instanceRef.current?.zoomToActual(),
-        resetViewport: () => instanceRef.current?.resetViewportAnimated(),
+        resetViewport: () => instanceRef.current?.resetViewport(),
         getViewport: () =>
           instanceRef.current?.getViewport() ?? { zoom: 1, panX: 0, panY: 0 },
         setViewport: (viewport) => instanceRef.current?.setViewport(viewport),
         getCanvas: () => instanceRef.current,
       }),
-      [instanceRef]
+      [instanceRef],
     );
 
     // Handle image load with aspect ratio extraction
@@ -146,7 +157,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
         }
         onLoad?.(info);
       },
-      [fitToImage, onLoad]
+      [fitToImage, onLoad],
     );
 
     // Load image when it changes
@@ -158,8 +169,8 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
     // Setup zoom/pan if enabled
     const viewportOptions: UseViewportOptions =
       typeof interactions === "boolean"
-        ? { enabled: interactions, onViewportChange, onAnimationEnd }
-        : { enabled: true, ...interactions, onViewportChange, onAnimationEnd };
+        ? { enabled: interactions, onViewportChange }
+        : { enabled: true, ...interactions, onViewportChange };
 
     useViewport(instanceRef, canvasRef, viewportOptions);
 
@@ -168,7 +179,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
       ...style,
       cursor: viewportOptions.enabled ? "grab" : undefined,
       aspectRatio: fitToImage ? aspectRatio : style?.aspectRatio,
-      outline: 'none', // Remove focus outline for keyboard navigation
+      outline: "none", // Remove focus outline for keyboard navigation
     };
 
     return (
@@ -179,7 +190,11 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(
         {...rest}
       />
     );
-  }
+  },
 );
 
-export { type UseViewportOptions, type UseViewportResult, type ImageInfo } from "./hooks";
+export {
+  type ImageInfo,
+  type UseViewportOptions,
+  type UseViewportResult,
+} from "./hooks";

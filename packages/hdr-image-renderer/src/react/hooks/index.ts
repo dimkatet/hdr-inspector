@@ -6,3 +6,4 @@ export {
   type UseViewportOptions,
   type UseViewportResult,
 } from "./useViewport";
+export { useZoomCallback } from "./useZoomCallback";

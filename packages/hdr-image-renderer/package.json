@@ -44,9 +44,13 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.5",
+    "@types/throttle-debounce": "^5.0.2",
     "@webgpu/types": "^0.1.68",
     "react": "^19.2.0",
     "tsup": "^8.3.5",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "throttle-debounce": "^5.0.2"
   }
 }
