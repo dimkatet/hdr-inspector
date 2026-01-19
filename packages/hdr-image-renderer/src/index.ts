@@ -23,9 +23,12 @@ export type {
   ColorSpace,
   ViewportState,
   ViewportConfig,
+  ViewportMutation,
+  MutationSource,
   ImageInfo,
   InteractionOptions,
-  PointerConfig,
+  MouseConfig,
+  TouchConfig,
   WheelConfig,
   KeyboardConfig,
 } from './types';

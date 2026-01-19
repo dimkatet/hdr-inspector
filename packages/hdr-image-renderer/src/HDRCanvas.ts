@@ -180,8 +180,9 @@ export class HDRCanvas {
    */
   setZoom(zoom: number): void {
     this.viewportController.applyMutation({
-      type: 'zoom.to',
-      factor: zoom,
+      type: 'zoom',
+      zoom,
+      source: 'programmatic',
       duration: 0,
     });
   }
@@ -192,10 +193,12 @@ export class HDRCanvas {
    * @param y Pan Y in normalized coordinates
    */
   setPan(x: number, y: number): void {
+    const current = this.viewportController.getState();
     this.viewportController.applyMutation({
-      type: 'pan.drag',
-      deltaX: this.viewportController.getState().panX - x,
-      deltaY: this.viewportController.getState().panY - y,
+      type: 'pan',
+      deltaX: x - current.panX,
+      deltaY: y - current.panY,
+      source: 'programmatic',
       duration: 0,
     });
   }
@@ -220,6 +223,7 @@ export class HDRCanvas {
   resetViewport(animated = true): void {
     this.viewportController.applyMutation({
       type: 'reset',
+      source: 'programmatic',
       duration: animated ? undefined : 0,
     });
   }
@@ -228,10 +232,14 @@ export class HDRCanvas {
    * Zoom in by a factor (centered, animated)
    * @param factor - Zoom multiplier (default: 2)
    */
-  zoomIn(factor?: number): void {
+  zoomIn(factor = 2): void {
+    const currentZoom = this.viewportController.getState().zoom;
+    const newZoom = currentZoom * factor;
+
     this.viewportController.applyMutation({
-      type: 'zoom.in',
-      factor,
+      type: 'zoom',
+      zoom: newZoom,
+      source: 'button',
     });
   }
 
@@ -239,10 +247,14 @@ export class HDRCanvas {
    * Zoom out by a factor (centered, animated)
    * @param factor - Zoom divisor (default: 2)
    */
-  zoomOut(factor?: number): void {
+  zoomOut(factor = 2): void {
+    const currentZoom = this.viewportController.getState().zoom;
+    const newZoom = currentZoom / factor;
+
     this.viewportController.applyMutation({
-      type: 'zoom.out',
-      factor,
+      type: 'zoom',
+      zoom: newZoom,
+      source: 'button',
     });
   }
 
@@ -252,8 +264,9 @@ export class HDRCanvas {
    */
   zoomToFit(): void {
     this.viewportController.applyMutation({
-      type: 'zoom.to',
-      factor: 1,
+      type: 'zoom',
+      zoom: 1,
+      source: 'button',
     });
   }
 
@@ -276,9 +289,12 @@ export class HDRCanvas {
         ? canvasRect.width / imageDims.width
         : canvasRect.height / imageDims.height;
 
+    const actualZoom = 1 / fitScale;
+
     this.viewportController.applyMutation({
-      type: 'zoom.to',
-      factor: 1 / fitScale,
+      type: 'zoom',
+      zoom: actualZoom,
+      source: 'button',
     });
   }
 
@@ -303,17 +319,15 @@ export class HDRCanvas {
     const throttledCallback = throttle(throttleMs, callback);
 
     return this.viewportController.onMutation((mutation, _prev, target) => {
-      switch (mutation.type) {
-        case 'zoom.in':
-        case 'zoom.out':
-        case 'zoom.to':
-        case 'reset':
-          callback(target.zoom, target);
-          break;
-        case 'zoom.wheel':
-        case 'zoom.pinch':
+      if (mutation.type === 'zoom') {
+        // Throttle wheel/pinch gestures, immediate for button/programmatic
+        if (mutation.source === 'wheel' || mutation.source === 'pinch') {
           throttledCallback(target.zoom, target);
-          break;
+        } else {
+          callback(target.zoom, target);
+        }
+      } else if (mutation.type === 'reset') {
+        callback(target.zoom, target);
       }
     });
   }
@@ -355,28 +369,40 @@ export class HDRCanvas {
 
     // Parse wheel config
     const wheelEnabled = typeof wheel === 'boolean' ? wheel : (wheel?.enabled ?? true);
-    const wheelSensitivity = typeof wheel === 'object' ? wheel.sensitivity : undefined;
+    const wheelSensitivity = typeof wheel === 'object' ? (wheel.sensitivity ?? 0.001) : 0.001;
 
     // Create mouse handler with config
     const mouseHandler = new MouseHandler(
       this.canvas,
       {
-        onWheelZoom: (zoomDelta, cursorX, cursorY) =>
+        onWheel: (deltaY, cursorX, cursorY) => {
+          // Calculate zoom from wheel delta
+          const zoomDelta = -deltaY * wheelSensitivity;
+          const currentZoom = this.viewportController.getState().zoom;
+          const newZoom = currentZoom * Math.exp(zoomDelta);
+
           this.viewportController.applyMutation({
-            type: 'zoom.wheel',
-            zoomDelta,
-            cursorX,
-            cursorY,
-          }),
-        onDragPan: (deltaX, deltaY) =>
+            type: 'zoom',
+            zoom: newZoom,
+            centerX: cursorX,
+            centerY: cursorY,
+            source: 'wheel',
+          });
+        },
+        onDrag: (deltaX, deltaY) =>
           this.viewportController.applyMutation({
-            type: 'pan.drag',
+            type: 'pan',
             deltaX,
             deltaY,
+            source: 'drag',
           }),
-        onReset: () => this.viewportController.applyMutation({ type: 'reset' }),
+        onDblClick: () =>
+          this.viewportController.applyMutation({
+            type: 'reset',
+            source: 'dblclick',
+          }),
       },
-      { wheel: wheelEnabled, drag, wheelSensitivity }
+      { wheel: wheelEnabled, drag }
     );
 
     // Create touch handler with config
@@ -385,18 +411,29 @@ export class HDRCanvas {
       {
         onPan: (deltaX, deltaY) =>
           this.viewportController.applyMutation({
-            type: 'pan.drag',
+            type: 'pan',
             deltaX,
             deltaY,
+            source: 'drag',
           }),
-        onPinchZoom: (scaleDelta, centerX, centerY) =>
+        onPinch: (scaleDelta, centerX, centerY) => {
+          // Calculate new zoom from pinch scale
+          const currentZoom = this.viewportController.getState().zoom;
+          const newZoom = currentZoom * scaleDelta;
+
           this.viewportController.applyMutation({
-            type: 'zoom.pinch',
-            scale: scaleDelta,
-            cx: centerX,
-            cy: centerY,
+            type: 'zoom',
+            zoom: newZoom,
+            centerX,
+            centerY,
+            source: 'pinch',
+          });
+        },
+        onDoubleTap: () =>
+          this.viewportController.applyMutation({
+            type: 'reset',
+            source: 'doubletap',
           }),
-        onReset: () => this.viewportController.applyMutation({ type: 'reset' }),
       },
       { enabled: touch }
     );
@@ -407,15 +444,21 @@ export class HDRCanvas {
       {
         onPan: (deltaX, deltaY) =>
           this.viewportController.applyMutation({
-            type: 'pan.drag',
+            type: 'pan',
             deltaX,
             deltaY,
+            source: 'keyboard',
           }),
         onZoomIn: () => this.zoomIn(),
         onZoomOut: () => this.zoomOut(),
         onZoomToFit: () => this.zoomToFit(),
         onZoomToActual: () => this.zoomToActual(),
-        onReset: () => this.viewportController.applyMutation({ type: 'reset', duration: 0 }),
+        onReset: () =>
+          this.viewportController.applyMutation({
+            type: 'reset',
+            source: 'keyboard',
+            duration: 0,
+          }),
       },
       typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
     );

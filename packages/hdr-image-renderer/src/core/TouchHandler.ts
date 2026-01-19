@@ -8,10 +8,10 @@
 export interface TouchCallbacks {
   /** Called on single-finger pan. deltaX/Y: normalized movement */
   onPan: (deltaX: number, deltaY: number) => void;
-  /** Called on pinch zoom. scaleDelta: multiplier, centerX/Y: normalized [0,1] */
-  onPinchZoom: (scaleDelta: number, centerX: number, centerY: number) => void;
-  /** Called on double-tap (reset) */
-  onReset: () => void;
+  /** Called on pinch gesture. scaleDelta: multiplier (currentDistance/previousDistance), centerX/Y: normalized [0,1] */
+  onPinch: (scaleDelta: number, centerX: number, centerY: number) => void;
+  /** Called on double-tap */
+  onDoubleTap: () => void;
 }
 
 export interface TouchHandlerConfig {
@@ -128,7 +128,7 @@ export class TouchHandler {
           TouchHandler.DOUBLE_TAP_DISTANCE
       ) {
         // Double-tap detected
-        this.callbacks.onReset();
+        this.callbacks.onDoubleTap();
         this.lastTapTime = 0;
         this.lastTapPos = null;
       } else {
@@ -167,7 +167,7 @@ export class TouchHandler {
         const centerX = (center.x - rect.left) / rect.width;
         const centerY = (center.y - rect.top) / rect.height;
 
-        this.callbacks.onPinchZoom(scaleDelta, centerX, centerY);
+        this.callbacks.onPinch(scaleDelta, centerX, centerY);
       }
 
       this.lastPinchDistance = currentDistance;

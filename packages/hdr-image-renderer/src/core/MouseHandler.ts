@@ -6,12 +6,12 @@
  */
 
 export interface MouseCallbacks {
-  /** Called on wheel zoom. zoomDelta: calculated zoom change, cursorX/Y: normalized [0,1] */
-  onWheelZoom: (zoomDelta: number, cursorX: number, cursorY: number) => void;
+  /** Called on wheel event. deltaY: raw wheel delta, cursorX/Y: normalized [0,1] */
+  onWheel: (deltaY: number, cursorX: number, cursorY: number) => void;
   /** Called on drag pan. deltaX/Y: normalized movement */
-  onDragPan: (deltaX: number, deltaY: number) => void;
-  /** Called on double-click (reset) */
-  onReset: () => void;
+  onDrag: (deltaX: number, deltaY: number) => void;
+  /** Called on double-click */
+  onDblClick: () => void;
 }
 
 export interface MouseHandlerConfig {
@@ -19,8 +19,6 @@ export interface MouseHandlerConfig {
   wheel?: boolean;
   /** Enable mouse drag pan (default: true) */
   drag?: boolean;
-  /** Wheel zoom sensitivity (default: 0.001) */
-  wheelSensitivity?: number;
 }
 
 export class MouseHandler {
@@ -50,7 +48,6 @@ export class MouseHandler {
     this.config = {
       wheel: config.wheel ?? true,
       drag: config.drag ?? true,
-      wheelSensitivity: config.wheelSensitivity ?? 0.001,
     };
 
     // Bind handlers once
@@ -124,10 +121,7 @@ export class MouseHandler {
     const cursorX = (e.clientX - rect.left) / rect.width;
     const cursorY = (e.clientY - rect.top) / rect.height;
 
-    // Calculate zoom delta using sensitivity
-    const zoomDelta = -e.deltaY * this.config.wheelSensitivity;
-
-    this.callbacks.onWheelZoom(zoomDelta, cursorX, cursorY);
+    this.callbacks.onWheel(e.deltaY, cursorX, cursorY);
   }
 
   private handleMouseDown(e: MouseEvent): void {
@@ -145,7 +139,7 @@ export class MouseHandler {
     const deltaX = (e.clientX - this.lastPos.x) / rect.width;
     const deltaY = (e.clientY - this.lastPos.y) / rect.height;
     this.lastPos = { x: e.clientX, y: e.clientY };
-    this.callbacks.onDragPan(deltaX, deltaY);
+    this.callbacks.onDrag(deltaX, deltaY);
   }
 
   private handleMouseUp(): void {
@@ -156,6 +150,6 @@ export class MouseHandler {
 
   private handleDblClick(e: MouseEvent): void {
     e.preventDefault();
-    this.callbacks.onReset();
+    this.callbacks.onDblClick();
   }
 }

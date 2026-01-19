@@ -6,9 +6,9 @@ import type {
   HDRCanvasOptions,
   KeyboardConfig,
   LinearImageData,
-  PointerConfig,
   ViewportConfig,
   ViewportState,
+  WheelConfig,
 } from '../types';
 import {
   type ImageInfo,
@@ -57,11 +57,16 @@ import {
  *   }
  * }}
  */
-export type InteractionsConfig = PointerConfig &
-  ViewportConfig & {
-    /** Keyboard control configuration (true for defaults, object for custom config) */
-    keyboard?: boolean | KeyboardConfig;
-  };
+export type InteractionsConfig = ViewportConfig & {
+  /** Enable/configure mouse wheel zoom (true for defaults, object for custom config) */
+  wheel?: boolean | WheelConfig;
+  /** Enable mouse drag pan (default: true) */
+  drag?: boolean;
+  /** Enable touch gestures (default: true) */
+  touch?: boolean;
+  /** Keyboard control configuration (true for defaults, object for custom config) */
+  keyboard?: boolean | KeyboardConfig;
+};
 
 /**
  * Imperative handle exposed via ref

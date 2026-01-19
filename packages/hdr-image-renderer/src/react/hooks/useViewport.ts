@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HDRCanvas } from '../../HDRCanvas';
-import type { KeyboardConfig, PointerConfig, ViewportConfig, ViewportState } from '../../types';
+import type { KeyboardConfig, ViewportConfig, ViewportState, WheelConfig } from '../../types';
 
-export interface UseViewportOptions extends ViewportConfig, PointerConfig {
+export interface UseViewportOptions extends ViewportConfig {
   /** Enable zoom/pan interactions */
   enabled?: boolean;
+  /** Enable/configure mouse wheel zoom (true for defaults, object for custom config) */
+  wheel?: boolean | WheelConfig;
+  /** Enable mouse drag pan (default: true) */
+  drag?: boolean;
+  /** Enable touch gestures (default: true) */
+  touch?: boolean;
   /** Keyboard control configuration (true for defaults, object for custom config) */
   keyboard?: boolean | KeyboardConfig;
   /** Callback when viewport changes (fires on every frame during animation) */

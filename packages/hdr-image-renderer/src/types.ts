@@ -90,31 +90,46 @@ export type TransitionEndListener = (state: ViewportState) => void;
  */
 export type EasingFunction = 'linear' | 'ease-out';
 
+/**
+ * Source of viewport mutation (where it originated from)
+ */
+export type MutationSource = 'wheel' | 'pinch' | 'drag' | 'keyboard' | 'button' | 'dblclick' | 'doubletap' | 'programmatic';
+
+/**
+ * Viewport mutations - primitive operations on viewport state
+ */
 export type ViewportMutation =
-  | { type: 'zoom.in'; duration?: number; factor?: number }
-  | { type: 'zoom.out'; duration?: number; factor?: number }
-  | { type: 'zoom.to'; duration?: number; factor: number }
   | {
-      type: 'zoom.wheel';
+      type: 'zoom';
+      /** Target zoom level */
+      zoom: number;
+      /** Center X in normalized coordinates [0,1] (optional, defaults to 0.5) */
+      centerX?: number;
+      /** Center Y in normalized coordinates [0,1] (optional, defaults to 0.5) */
+      centerY?: number;
+      /** Source of the mutation */
+      source: MutationSource;
+      /** Animation duration in ms (optional, uses config default) */
       duration?: number;
-      zoomDelta: number;
-      cursorX: number;
-      cursorY: number;
     }
   | {
-      type: 'pan.drag';
-      duration?: number;
+      type: 'pan';
+      /** Pan delta X in normalized coordinates */
       deltaX: number;
+      /** Pan delta Y in normalized coordinates */
       deltaY: number;
-    }
-  | {
-      type: 'zoom.pinch';
-      scale: number;
-      cx: number;
-      cy: number;
+      /** Source of the mutation */
+      source: MutationSource;
+      /** Animation duration in ms (optional, uses config default or 0 for instant) */
       duration?: number;
     }
-  | { type: 'reset'; duration?: number };
+  | {
+      type: 'reset';
+      /** Source of the mutation */
+      source: MutationSource;
+      /** Animation duration in ms (optional, uses config default) */
+      duration?: number;
+    };
 
 /**
  * Viewport state for zoom/pan
@@ -165,15 +180,21 @@ export interface WheelConfig {
 }
 
 /**
- * Configuration for pointer interactions (mouse/touch)
+ * Configuration for mouse interactions
  */
-export interface PointerConfig {
+export interface MouseConfig {
   /** Enable/configure mouse wheel zoom (true for defaults, object for custom config) */
   wheel?: boolean | WheelConfig;
   /** Enable mouse drag pan (default: true) */
   drag?: boolean;
-  /** Enable touch gestures (pinch, drag, double-tap) (default: true) */
-  touch?: boolean;
+}
+
+/**
+ * Configuration for touch interactions
+ */
+export interface TouchConfig {
+  /** Enable touch gestures (pinch, pan, double-tap) (default: true) */
+  enabled?: boolean;
 }
 
 /**
@@ -207,7 +228,13 @@ export interface KeyboardConfig {
 /**
  * Options for attachInteractions()
  */
-export interface InteractionOptions extends ViewportConfig, PointerConfig {
+export interface InteractionOptions extends ViewportConfig {
+  /** Enable/configure mouse wheel zoom (true for defaults, object for custom config) */
+  wheel?: boolean | WheelConfig;
+  /** Enable mouse drag pan (default: true) */
+  drag?: boolean;
+  /** Enable touch gestures (default: true) */
+  touch?: boolean;
   /** Keyboard control configuration (true for defaults, object for custom config) */
   keyboard?: boolean | KeyboardConfig;
 }
