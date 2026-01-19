@@ -30,17 +30,17 @@ export interface LinearImageData {
 /**
  * Tone mapping operators
  */
-export type ToneMappingOperator = "none" | "reinhard" | "aces";
+export type ToneMappingOperator = 'none' | 'reinhard' | 'aces';
 
 /**
  * Visualization modes
  */
-export type VisualizationMode = "rgb" | "luminance" | "clipping";
+export type VisualizationMode = 'rgb' | 'luminance' | 'clipping';
 
 /**
  * Color space for rendering
  */
-export type ColorSpace = "srgb" | "display-p3" | "rec2020";
+export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 
 /**
  * Options for HDRCanvas initialization
@@ -76,34 +76,34 @@ export type UpdateListener = (state: ViewportState) => void;
 export type MutationListener = (
   mutation: ViewportMutation,
   prev: ViewportState,
-  target: ViewportState,
+  target: ViewportState
 ) => void;
 
 export type ViewportMutation =
-  | { type: "zoom.in"; transitionSpeed?: number; factor?: number }
-  | { type: "zoom.out"; transitionSpeed?: number; factor?: number }
-  | { type: "zoom.to"; transitionSpeed?: number; factor: number }
+  | { type: 'zoom.in'; transitionSpeed?: number; factor?: number }
+  | { type: 'zoom.out'; transitionSpeed?: number; factor?: number }
+  | { type: 'zoom.to'; transitionSpeed?: number; factor: number }
   | {
-      type: "zoom.wheel";
+      type: 'zoom.wheel';
       transitionSpeed?: number;
       zoomDelta: number;
       cursorX: number;
       cursorY: number;
     }
   | {
-      type: "pan.drag";
+      type: 'pan.drag';
       transitionSpeed?: number;
       deltaX: number;
       deltaY: number;
     }
   | {
-      type: "zoom.pinch";
+      type: 'zoom.pinch';
       scale: number;
       cx: number;
       cy: number;
       transitionSpeed?: number;
     }
-  | { type: "reset"; transitionSpeed?: number; };
+  | { type: 'reset'; transitionSpeed?: number };
 
 /**
  * Viewport state for zoom/pan

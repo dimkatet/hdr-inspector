@@ -5,11 +5,11 @@
  */
 
 import type {
+  ColorSpace,
   RenderState,
   ToneMappingOperator,
   VisualizationMode,
-  ColorSpace
-} from '@dimkatet/hdr-image-renderer'
+} from '@dimkatet/hdr-image-renderer';
 
 interface ControlsProps {
   renderState: RenderState;
@@ -51,10 +51,17 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
           max="10"
           step="0.1"
           value={renderState.exposure}
-          onChange={(e) => handleExposureChange(parseFloat(e.target.value))}
+          onChange={(e) => handleExposureChange(Number.parseFloat(e.target.value))}
           style={{ width: '100%' }}
         />
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#888' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#888',
+          }}
+        >
           <span>-10 EV</span>
           <span>0 EV</span>
           <span>+10 EV</span>
@@ -69,6 +76,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
         <div style={{ display: 'flex', gap: '8px' }}>
           {(['none', 'reinhard', 'aces'] as ToneMappingOperator[]).map((op) => (
             <button
+              type="button"
               key={op}
               onClick={() => handleToneMappingChange(op)}
               style={{
@@ -97,6 +105,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
         <div style={{ display: 'flex', gap: '8px' }}>
           {(['rgb', 'luminance', 'clipping'] as VisualizationMode[]).map((mode) => (
             <button
+              type="button"
               key={mode}
               onClick={() => handleVisualizationModeChange(mode)}
               style={{
@@ -119,21 +128,46 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
 
       {/* HDR Mode */}
       <div style={{ marginBottom: '20px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', cursor: hdrAvailable ? 'pointer' : 'not-allowed', opacity: hdrAvailable ? 1 : 0.5 }}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            cursor: hdrAvailable ? 'pointer' : 'not-allowed',
+            opacity: hdrAvailable ? 1 : 0.5,
+          }}
+        >
           <input
             type="checkbox"
             checked={renderState.hdrMode}
             onChange={(e) => handleHdrModeChange(e.target.checked)}
             disabled={!hdrAvailable}
-            style={{ marginRight: '8px', width: '18px', height: '18px', cursor: hdrAvailable ? 'pointer' : 'not-allowed' }}
+            style={{
+              marginRight: '8px',
+              width: '18px',
+              height: '18px',
+              cursor: hdrAvailable ? 'pointer' : 'not-allowed',
+            }}
           />
           <span style={{ fontWeight: 'bold' }}>HDR Mode (PQ Output)</span>
         </label>
-        <p style={{ margin: '8px 0 0', fontSize: '12px', color: hdrAvailable ? '#888' : '#fbbf24', lineHeight: '1.4' }}>
+        <p
+          style={{
+            margin: '8px 0 0',
+            fontSize: '12px',
+            color: hdrAvailable ? '#888' : '#fbbf24',
+            lineHeight: '1.4',
+          }}
+        >
           {hdrAvailable ? (
-            <>Enable PQ (ST.2084) encoding for native HDR displays. Your display supports HDR output.</>
+            <>
+              Enable PQ (ST.2084) encoding for native HDR displays. Your display supports HDR
+              output.
+            </>
           ) : (
-            <>⚠️ HDR mode unavailable: Requires HDR monitor. On SDR display, this would produce very dark, incorrect output.</>
+            <>
+              ⚠️ HDR mode unavailable: Requires HDR monitor. On SDR display, this would produce very
+              dark, incorrect output.
+            </>
           )}
         </p>
       </div>
@@ -146,6 +180,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
         <div style={{ display: 'flex', gap: '8px' }}>
           {(['srgb', 'display-p3'] as ColorSpace[]).map((cs) => (
             <button
+              type="button"
               key={cs}
               onClick={() => handleColorSpaceChange(cs)}
               style={{

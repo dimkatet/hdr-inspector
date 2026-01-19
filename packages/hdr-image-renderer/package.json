@@ -15,23 +15,14 @@
       "import": "./dist/react/index.js"
     }
   },
-  "files": [
-    "dist",
-    "README.md"
-  ],
+  "files": ["dist", "README.md"],
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch",
+    "watch": "tsup --watch",
     "clean": "rm -rf dist .turbo",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": [
-    "hdr",
-    "webgpu",
-    "image-viewer",
-    "radiance",
-    "tone-mapping"
-  ],
+  "keywords": ["hdr", "webgpu", "image-viewer", "radiance", "tone-mapping"],
   "author": "dimkatet",
   "license": "MIT",
   "peerDependencies": {

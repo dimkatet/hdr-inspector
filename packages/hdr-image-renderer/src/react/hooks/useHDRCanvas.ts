@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import { HDRCanvas } from "../../HDRCanvas";
-import type { HDRCanvasOptions } from "../../types";
+import { useEffect, useRef } from 'react';
+import { HDRCanvas } from '../../HDRCanvas';
+import type { HDRCanvasOptions } from '../../types';
 
 export interface UseHDRCanvasResult {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
@@ -37,7 +37,7 @@ export function useHDRCanvas(
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount - initialOptions captured in closure
 
   return { canvasRef, instanceRef };

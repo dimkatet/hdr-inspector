@@ -1,9 +1,9 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
-    'react/index': 'src/react/index.tsx'
+    'react/index': 'src/react/index.tsx',
   },
   format: ['esm'],
   dts: true,
@@ -11,5 +11,5 @@ export default defineConfig({
   sourcemap: true,
   external: ['react'],
   treeshake: true,
-  splitting: false
-})
+  splitting: false,
+});

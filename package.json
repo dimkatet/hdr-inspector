@@ -7,7 +7,10 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "dev:example": "pnpm --filter hdr-inspector-demo dev",
     "build:lib": "pnpm --filter @dimkatet/hdr-image-renderer build",
@@ -15,19 +18,14 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@biomejs/biome": "^1.9.4",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "@webgpu/types": "^0.1.68",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "globals": "^16.5.0",
     "turbo": "^2.7.4",
     "typescript": "~5.9.3",
-    "typescript-eslint": "^8.46.4",
     "vite": "npm:rolldown-vite@7.2.5"
   },
   "pnpm": {

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import type { HDRCanvas } from "../../HDRCanvas";
-import type { ViewportState } from "../../types";
+import { useEffect, useRef } from 'react';
+import type { HDRCanvas } from '../../HDRCanvas';
+import type { ViewportState } from '../../types';
 
 /**
  * Hook for subscribing to zoom changes on HDRCanvas.

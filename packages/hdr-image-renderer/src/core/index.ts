@@ -11,15 +11,15 @@ export {
   toneMappingACES,
   applyToneMapping,
   linearToSRGB,
-  srgbToLinear
-} from './color'
+  srgbToLinear,
+} from './color';
 
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
-  type HDRCapabilities
-} from './hdr-capabilities'
+  type HDRCapabilities,
+} from './hdr-capabilities';
 
-export { ViewportController } from './ViewportController'
-export { PointerHandler, type PointerCallbacks } from './PointerHandler'
-export { KeyboardHandler, type KeyboardCallbacks } from './KeyboardHandler'
+export { ViewportController } from './ViewportController';
+export { PointerHandler, type PointerCallbacks } from './PointerHandler';
+export { KeyboardHandler, type KeyboardCallbacks } from './KeyboardHandler';

@@ -75,9 +75,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         transition: 'all 0.2s',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>
-        Drop HDR file here
-      </p>
+      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Drop HDR file here</p>
       <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#888' }}>
         Supported formats: Radiance HDR (.hdr), OpenEXR (.exr)
       </p>

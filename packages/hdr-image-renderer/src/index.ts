@@ -1,7 +1,7 @@
 // Core exports for vanilla JS API
 
-export { HDRCanvas } from './HDRCanvas'
-export { decodeRadianceHDR, DecodeError } from './decoders'
+export { HDRCanvas } from './HDRCanvas';
+export { decodeRadianceHDR, DecodeError } from './decoders';
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
@@ -10,8 +10,8 @@ export {
   KeyboardHandler,
   type HDRCapabilities,
   type PointerCallbacks,
-  type KeyboardCallbacks
-} from './core'
+  type KeyboardCallbacks,
+} from './core';
 export type {
   HDRCanvasOptions,
   RenderState,
@@ -25,5 +25,5 @@ export type {
   InteractionOptions,
   PointerConfig,
   WheelConfig,
-  KeyboardConfig
-} from './types'
+  KeyboardConfig,
+} from './types';

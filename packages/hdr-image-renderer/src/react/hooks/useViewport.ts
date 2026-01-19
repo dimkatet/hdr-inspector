@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { HDRCanvas } from "../../HDRCanvas";
-import type { ViewportState, ViewportConfig, PointerConfig, KeyboardConfig } from "../../types";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { HDRCanvas } from '../../HDRCanvas';
+import type { KeyboardConfig, PointerConfig, ViewportConfig, ViewportState } from '../../types';
 
 export interface UseViewportOptions extends ViewportConfig, PointerConfig {
   /** Enable zoom/pan interactions */
@@ -61,8 +61,14 @@ export function useViewport(
       detachInteractions();
       unsubscribeViewport();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, instanceRef, viewportConfig.minZoom, viewportConfig.maxZoom, viewportConfig.animationSpeed, keyboard]);
+  }, [
+    enabled,
+    instanceRef,
+    viewportConfig.minZoom,
+    viewportConfig.maxZoom,
+    viewportConfig.animationSpeed,
+    keyboard,
+  ]);
 
   // Reset function
   const resetViewport = useCallback(() => {

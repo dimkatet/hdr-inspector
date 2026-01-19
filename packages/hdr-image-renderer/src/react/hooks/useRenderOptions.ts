@@ -1,6 +1,6 @@
-import { useEffect } from "react";
-import type { HDRCanvas } from "../../HDRCanvas";
-import type { HDRCanvasOptions } from "../../types";
+import { useEffect } from 'react';
+import type { HDRCanvas } from '../../HDRCanvas';
+import type { HDRCanvasOptions } from '../../types';
 
 /**
  * Hook for synchronizing render options with HDRCanvas instance.

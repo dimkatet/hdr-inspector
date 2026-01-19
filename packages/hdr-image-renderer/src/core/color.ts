@@ -15,8 +15,8 @@
 export const BT709_WEIGHTS = {
   r: 0.2126,
   g: 0.7152,
-  b: 0.0722
-} as const
+  b: 0.0722,
+} as const;
 
 /**
  * Compute luminance (Y) from linear RGB
@@ -27,7 +27,7 @@ export const BT709_WEIGHTS = {
  * @returns Luminance in cd/m² (for scene-referred, unitless)
  */
 export function luminance(r: number, g: number, b: number): number {
-  return BT709_WEIGHTS.r * r + BT709_WEIGHTS.g * g + BT709_WEIGHTS.b * b
+  return BT709_WEIGHTS.r * r + BT709_WEIGHTS.g * g + BT709_WEIGHTS.b * b;
 }
 
 /**
@@ -38,7 +38,7 @@ export function luminance(r: number, g: number, b: number): number {
  * @returns Exposure-adjusted value
  */
 export function applyExposure(value: number, ev: number): number {
-  return value * Math.pow(2, ev)
+  return value * 2 ** ev;
 }
 
 /**
@@ -54,7 +54,7 @@ export function applyExposure(value: number, ev: number): number {
  * @returns Clamped value in [0, 1]
  */
 export function toneMappingNone(x: number): number {
-  return Math.max(0, Math.min(1, x))
+  return Math.max(0, Math.min(1, x));
 }
 
 /**
@@ -70,7 +70,7 @@ export function toneMappingNone(x: number): number {
  * @returns Tone-mapped value in [0, 1)
  */
 export function toneMappingReinhard(x: number): number {
-  return x / (1 + x)
+  return x / (1 + x);
 }
 
 /**
@@ -90,13 +90,13 @@ export function toneMappingReinhard(x: number): number {
  * @returns Tone-mapped value
  */
 export function toneMappingACES(x: number): number {
-  const a = 2.51
-  const b = 0.03
-  const c = 2.43
-  const d = 0.59
-  const e = 0.14
+  const a = 2.51;
+  const b = 0.03;
+  const c = 2.43;
+  const d = 0.59;
+  const e = 0.14;
 
-  return Math.max(0, (x * (a * x + b)) / (x * (c * x + d) + e))
+  return Math.max(0, (x * (a * x + b)) / (x * (c * x + d) + e));
 }
 
 /**
@@ -114,21 +114,21 @@ export function applyToneMapping(
   b: number,
   operator: 'none' | 'reinhard' | 'aces'
 ): [number, number, number] {
-  let mapFn: (x: number) => number
+  let mapFn: (x: number) => number;
 
   switch (operator) {
     case 'none':
-      mapFn = toneMappingNone
-      break
+      mapFn = toneMappingNone;
+      break;
     case 'reinhard':
-      mapFn = toneMappingReinhard
-      break
+      mapFn = toneMappingReinhard;
+      break;
     case 'aces':
-      mapFn = toneMappingACES
-      break
+      mapFn = toneMappingACES;
+      break;
   }
 
-  return [mapFn(r), mapFn(g), mapFn(b)]
+  return [mapFn(r), mapFn(g), mapFn(b)];
 }
 
 /**
@@ -146,9 +146,9 @@ export function applyToneMapping(
  */
 export function linearToSRGB(linear: number): number {
   if (linear <= 0.0031308) {
-    return 12.92 * linear
+    return 12.92 * linear;
   }
-  return 1.055 * Math.pow(linear, 1 / 2.4) - 0.055
+  return 1.055 * linear ** (1 / 2.4) - 0.055;
 }
 
 /**
@@ -161,7 +161,7 @@ export function linearToSRGB(linear: number): number {
  */
 export function srgbToLinear(srgb: number): number {
   if (srgb <= 0.04045) {
-    return srgb / 12.92
+    return srgb / 12.92;
   }
-  return Math.pow((srgb + 0.055) / 1.055, 2.4)
+  return ((srgb + 0.055) / 1.055) ** 2.4;
 }

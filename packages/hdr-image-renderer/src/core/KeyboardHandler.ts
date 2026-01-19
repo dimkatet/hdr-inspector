@@ -7,74 +7,74 @@
 
 export interface KeyboardCallbacks {
   /** Called when pan is requested. deltaX/Y: normalized movement */
-  onPan: (deltaX: number, deltaY: number) => void
+  onPan: (deltaX: number, deltaY: number) => void;
   /** Called when zoom in is requested */
-  onZoomIn: () => void
+  onZoomIn: () => void;
   /** Called when zoom out is requested */
-  onZoomOut: () => void
+  onZoomOut: () => void;
   /** Called when zoom to fit is requested */
-  onZoomToFit: () => void
+  onZoomToFit: () => void;
   /** Called when zoom to actual (1:1) is requested */
-  onZoomToActual: () => void
+  onZoomToActual: () => void;
   /** Called when reset is requested */
-  onReset: () => void
+  onReset: () => void;
 }
 
 export interface KeyboardConfig {
   /** Enable keyboard controls (default: true) */
-  enabled?: boolean
+  enabled?: boolean;
   /** Keys for pan up (default: ['ArrowUp', 'w', 'W']) */
-  panUp?: string | string[]
+  panUp?: string | string[];
   /** Keys for pan down (default: ['ArrowDown', 's', 'S']) */
-  panDown?: string | string[]
+  panDown?: string | string[];
   /** Keys for pan left (default: ['ArrowLeft', 'a', 'A']) */
-  panLeft?: string | string[]
+  panLeft?: string | string[];
   /** Keys for pan right (default: ['ArrowRight', 'd', 'D']) */
-  panRight?: string | string[]
+  panRight?: string | string[];
   /** Keys for zoom in (default: ['+', '=']) */
-  zoomIn?: string | string[]
+  zoomIn?: string | string[];
   /** Keys for zoom out (default: ['-', '_']) */
-  zoomOut?: string | string[]
+  zoomOut?: string | string[];
   /** Keys for zoom to fit (default: ['0']) */
-  zoomToFit?: string | string[]
+  zoomToFit?: string | string[];
   /** Keys for zoom to actual (default: ['1']) */
-  zoomToActual?: string | string[]
+  zoomToActual?: string | string[];
   /** Keys for reset viewport (default: ['r', 'R']) */
-  reset?: string | string[]
+  reset?: string | string[];
   /** Pan step size in normalized units (default: 0.1 = 10% of canvas) */
-  panStep?: number
+  panStep?: number;
 }
 
 interface NormalizedKeyboardConfig {
-  enabled: boolean
-  panUp: Set<string>
-  panDown: Set<string>
-  panLeft: Set<string>
-  panRight: Set<string>
-  zoomIn: Set<string>
-  zoomOut: Set<string>
-  zoomToFit: Set<string>
-  zoomToActual: Set<string>
-  reset: Set<string>
-  panStep: number
+  enabled: boolean;
+  panUp: Set<string>;
+  panDown: Set<string>;
+  panLeft: Set<string>;
+  panRight: Set<string>;
+  zoomIn: Set<string>;
+  zoomOut: Set<string>;
+  zoomToFit: Set<string>;
+  zoomToActual: Set<string>;
+  reset: Set<string>;
+  panStep: number;
 }
 
 export class KeyboardHandler {
-  private element: HTMLElement
-  private callbacks: KeyboardCallbacks
-  private config: NormalizedKeyboardConfig
-  private attached = false
+  private element: HTMLElement;
+  private callbacks: KeyboardCallbacks;
+  private config: NormalizedKeyboardConfig;
+  private attached = false;
 
   // Bound handler (for removeEventListener)
-  private boundHandleKeyDown: (e: KeyboardEvent) => void
+  private boundHandleKeyDown: (e: KeyboardEvent) => void;
 
   constructor(element: HTMLElement, callbacks: KeyboardCallbacks, config: KeyboardConfig = {}) {
-    this.element = element
-    this.callbacks = callbacks
-    this.config = this.normalizeConfig(config)
+    this.element = element;
+    this.callbacks = callbacks;
+    this.config = this.normalizeConfig(config);
 
     // Bind handler once
-    this.boundHandleKeyDown = this.handleKeyDown.bind(this)
+    this.boundHandleKeyDown = this.handleKeyDown.bind(this);
   }
 
   /**
@@ -82,9 +82,9 @@ export class KeyboardHandler {
    */
   private normalizeConfig(config: KeyboardConfig): NormalizedKeyboardConfig {
     const toSet = (value: string | string[] | undefined, defaults: string[]): Set<string> => {
-      if (value === undefined) return new Set(defaults)
-      return new Set(Array.isArray(value) ? value : [value])
-    }
+      if (value === undefined) return new Set(defaults);
+      return new Set(Array.isArray(value) ? value : [value]);
+    };
 
     return {
       enabled: config.enabled ?? true,
@@ -98,7 +98,7 @@ export class KeyboardHandler {
       zoomToActual: toSet(config.zoomToActual, ['1']),
       reset: toSet(config.reset, ['r', 'R']),
       panStep: config.panStep ?? 0.1,
-    }
+    };
   }
 
   /**
@@ -106,68 +106,76 @@ export class KeyboardHandler {
    * @returns Cleanup function
    */
   attach(): () => void {
-    console.log('[KeyboardHandler] attach() called, config.enabled:', this.config.enabled, 'attached:', this.attached)
+    console.log(
+      '[KeyboardHandler] attach() called, config.enabled:',
+      this.config.enabled,
+      'attached:',
+      this.attached
+    );
 
     if (this.attached || !this.config.enabled) {
-      return () => this.detach()
+      return () => this.detach();
     }
 
     // Make element focusable if not already
     if (!this.element.hasAttribute('tabindex')) {
-      this.element.setAttribute('tabindex', '0')
-      console.log('[KeyboardHandler] Added tabindex="0" to canvas')
+      this.element.setAttribute('tabindex', '0');
+      console.log('[KeyboardHandler] Added tabindex="0" to canvas');
     } else {
-      console.log('[KeyboardHandler] Canvas already has tabindex:', this.element.getAttribute('tabindex'))
+      console.log(
+        '[KeyboardHandler] Canvas already has tabindex:',
+        this.element.getAttribute('tabindex')
+      );
     }
 
     // Focus canvas on click (canvas doesn't auto-focus like input elements)
     const onClick = () => {
-      console.log('[KeyboardHandler] Canvas clicked, focusing...')
-      this.element.focus()
-    }
+      console.log('[KeyboardHandler] Canvas clicked, focusing...');
+      this.element.focus();
+    };
 
     // Debug focus events
-    const onFocus = () => console.log('[KeyboardHandler] Canvas focused')
-    const onBlur = () => console.log('[KeyboardHandler] Canvas blurred')
+    const onFocus = () => console.log('[KeyboardHandler] Canvas focused');
+    const onBlur = () => console.log('[KeyboardHandler] Canvas blurred');
 
-    this.element.addEventListener('click', onClick)
-    this.element.addEventListener('focus', onFocus)
-    this.element.addEventListener('blur', onBlur)
-    this.element.addEventListener('keydown', this.boundHandleKeyDown)
+    this.element.addEventListener('click', onClick);
+    this.element.addEventListener('focus', onFocus);
+    this.element.addEventListener('blur', onBlur);
+    this.element.addEventListener('keydown', this.boundHandleKeyDown);
 
-    this.attached = true
-    console.log('[KeyboardHandler] Event listener attached, element:', this.element.tagName)
+    this.attached = true;
+    console.log('[KeyboardHandler] Event listener attached, element:', this.element.tagName);
 
     return () => {
-      this.element.removeEventListener('click', onClick)
-      this.element.removeEventListener('focus', onFocus)
-      this.element.removeEventListener('blur', onBlur)
-      this.detach()
-    }
+      this.element.removeEventListener('click', onClick);
+      this.element.removeEventListener('focus', onFocus);
+      this.element.removeEventListener('blur', onBlur);
+      this.detach();
+    };
   }
 
   /**
    * Detach event listener
    */
   detach(): void {
-    if (!this.attached) return
+    if (!this.attached) return;
 
-    this.element.removeEventListener('keydown', this.boundHandleKeyDown)
-    this.attached = false
+    this.element.removeEventListener('keydown', this.boundHandleKeyDown);
+    this.attached = false;
   }
 
   /**
    * Check if handler is attached
    */
   isAttached(): boolean {
-    return this.attached
+    return this.attached;
   }
 
   /**
    * Cleanup
    */
   destroy(): void {
-    this.detach()
+    this.detach();
   }
 
   // ============================================================
@@ -175,50 +183,50 @@ export class KeyboardHandler {
   // ============================================================
 
   private handleKeyDown(e: KeyboardEvent): void {
-    const key = e.key
+    const key = e.key;
 
     // Ignore if modifier keys are pressed (except Shift for uppercase)
     if (e.ctrlKey || e.metaKey || e.altKey) {
-      return
+      return;
     }
 
-    let handled = false
+    let handled = false;
 
     // Pan controls
     if (this.config.panUp.has(key)) {
-      this.callbacks.onPan(0, this.config.panStep)
-      handled = true
+      this.callbacks.onPan(0, this.config.panStep);
+      handled = true;
     } else if (this.config.panDown.has(key)) {
-      this.callbacks.onPan(0, -this.config.panStep)
-      handled = true
+      this.callbacks.onPan(0, -this.config.panStep);
+      handled = true;
     } else if (this.config.panLeft.has(key)) {
-      this.callbacks.onPan(this.config.panStep, 0)
-      handled = true
+      this.callbacks.onPan(this.config.panStep, 0);
+      handled = true;
     } else if (this.config.panRight.has(key)) {
-      this.callbacks.onPan(-this.config.panStep, 0)
-      handled = true
+      this.callbacks.onPan(-this.config.panStep, 0);
+      handled = true;
     }
     // Zoom controls
     else if (this.config.zoomIn.has(key)) {
-      this.callbacks.onZoomIn()
-      handled = true
+      this.callbacks.onZoomIn();
+      handled = true;
     } else if (this.config.zoomOut.has(key)) {
-      this.callbacks.onZoomOut()
-      handled = true
+      this.callbacks.onZoomOut();
+      handled = true;
     } else if (this.config.zoomToFit.has(key)) {
-      this.callbacks.onZoomToFit()
-      handled = true
+      this.callbacks.onZoomToFit();
+      handled = true;
     } else if (this.config.zoomToActual.has(key)) {
-      this.callbacks.onZoomToActual()
-      handled = true
+      this.callbacks.onZoomToActual();
+      handled = true;
     } else if (this.config.reset.has(key)) {
-      this.callbacks.onReset()
-      handled = true
+      this.callbacks.onReset();
+      handled = true;
     }
 
     // Prevent default browser behavior if we handled the key
     if (handled) {
-      e.preventDefault()
+      e.preventDefault();
     }
   }
 }

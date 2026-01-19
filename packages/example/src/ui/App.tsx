@@ -4,48 +4,48 @@
  * Demonstrates usage of @dimkatet/hdr-image-renderer package
  */
 
-import { useState, useEffect } from 'react'
-import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer'
-import { decodeRadianceHDR, detectHDRCapabilities } from '@dimkatet/hdr-image-renderer'
-import { FileDrop } from './FileDrop'
-import { ImageCanvas } from './ImageCanvas'
-import { Controls } from './Controls'
-import { HDRInfo } from './HDRInfo'
+import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer';
+import { decodeRadianceHDR, detectHDRCapabilities } from '@dimkatet/hdr-image-renderer';
+import { useEffect, useState } from 'react';
+import { Controls } from './Controls';
+import { FileDrop } from './FileDrop';
+import { HDRInfo } from './HDRInfo';
+import { ImageCanvas } from './ImageCanvas';
 
 function App() {
-  const [image, setImage] = useState<LinearImageData | null>(null)
-  const [filename, setFilename] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [hdrAvailable, setHdrAvailable] = useState(false)
+  const [image, setImage] = useState<LinearImageData | null>(null);
+  const [filename, setFilename] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hdrAvailable, setHdrAvailable] = useState(false);
   const [renderState, setRenderState] = useState<RenderState>({
     exposure: 0,
     toneMapping: 'reinhard',
     visualizationMode: 'rgb',
     hdrMode: false,
-    colorSpace: 'srgb'
-  })
+    colorSpace: 'srgb',
+  });
 
   // Detect HDR capabilities on mount
   useEffect(() => {
     const checkHDR = async () => {
-      const caps = await detectHDRCapabilities()
-      setHdrAvailable(caps.canvasHDR)
-      console.log('[App] HDR available:', caps.canvasHDR)
-    }
-    checkHDR()
-  }, [])
+      const caps = await detectHDRCapabilities();
+      setHdrAvailable(caps.canvasHDR);
+      console.log('[App] HDR available:', caps.canvasHDR);
+    };
+    checkHDR();
+  }, []);
 
   const handleFileLoaded = async (arrayBuffer: ArrayBuffer, name: string) => {
     try {
-      setError(null)
-      const decodedImage = decodeRadianceHDR(arrayBuffer)
-      setImage(decodedImage)
-      setFilename(name)
+      setError(null);
+      const decodedImage = decodeRadianceHDR(arrayBuffer);
+      setImage(decodedImage);
+      setFilename(name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load image')
-      console.error('Decode error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load image');
+      console.error('Decode error:', err);
     }
-  }
+  };
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', color: '#fff' }}>
@@ -57,7 +57,7 @@ function App() {
         style={{
           padding: '16px 24px',
           backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #333'
+          borderBottom: '1px solid #333',
         }}
       >
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
@@ -84,6 +84,7 @@ function App() {
               )}
               <ImageCanvas image={image} renderState={renderState} />
               <button
+                type="button"
                 onClick={() => setImage(null)}
                 style={{
                   marginTop: '16px',
@@ -93,7 +94,7 @@ function App() {
                   border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontSize: '14px'
+                  fontSize: '14px',
                 }}
               >
                 Load Different Image
@@ -120,7 +121,7 @@ function App() {
               backgroundColor: '#331111',
               border: '1px solid #882222',
               borderRadius: '4px',
-              color: '#ff6666'
+              color: '#ff6666',
             }}
           >
             <strong>Error:</strong> {error}
@@ -136,7 +137,7 @@ function App() {
           fontSize: '12px',
           color: '#666',
           borderTop: '1px solid #333',
-          marginTop: '40px'
+          marginTop: '40px',
         }}
       >
         <p style={{ margin: 0 }}>
@@ -144,7 +145,7 @@ function App() {
         </p>
       </footer>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

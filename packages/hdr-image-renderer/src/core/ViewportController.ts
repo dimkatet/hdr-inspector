@@ -6,12 +6,12 @@
  */
 
 import type {
-  ViewportState,
-  ViewportConfig,
-  ViewportMutation,
   MutationListener,
   UpdateListener,
-} from "../types";
+  ViewportConfig,
+  ViewportMutation,
+  ViewportState,
+} from '../types';
 
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
   minZoom: 0.1,
@@ -62,7 +62,7 @@ export class ViewportController {
   private emitMutation(
     mutation: ViewportMutation,
     prev: ViewportState,
-    nextTarget: ViewportState,
+    nextTarget: ViewportState
   ): void {
     for (const listener of this.mutationListeners) {
       listener(mutation, prev, nextTarget);
@@ -103,27 +103,19 @@ export class ViewportController {
    */
   private processMutation(mutation: ViewportMutation): ViewportState {
     switch (mutation.type) {
-      case "zoom.in":
+      case 'zoom.in':
         return this.computeZoomIn(mutation.factor);
-      case "zoom.out":
+      case 'zoom.out':
         return this.computeZoomOut(mutation.factor);
-      case "zoom.to":
+      case 'zoom.to':
         return this.computeZoomTo(mutation.factor);
-      case "zoom.wheel":
-        return this.computeWheelZoom(
-          mutation.zoomDelta,
-          mutation.cursorX,
-          mutation.cursorY,
-        );
-      case "zoom.pinch":
-        return this.computePinchZoom(
-          mutation.scale,
-          mutation.cx,
-          mutation.cy,
-        );
-      case "pan.drag":
+      case 'zoom.wheel':
+        return this.computeWheelZoom(mutation.zoomDelta, mutation.cursorX, mutation.cursorY);
+      case 'zoom.pinch':
+        return this.computePinchZoom(mutation.scale, mutation.cx, mutation.cy);
+      case 'pan.drag':
         return this.computeDragPan(mutation.deltaX, mutation.deltaY);
-      case "reset":
+      case 'reset':
         return this.computeReset();
       default:
         return { ...this.getTarget() };
@@ -168,7 +160,7 @@ export class ViewportController {
   /**
    * Compute zoom in by a factor (centered)
    */
-  private computeZoomIn(factor: number = 2): ViewportState {
+  private computeZoomIn(factor = 2): ViewportState {
     const prevTarget = this.getTarget();
     const newZoom = Math.min(this.config.maxZoom, prevTarget.zoom * factor);
     return { ...prevTarget, zoom: newZoom };
@@ -177,7 +169,7 @@ export class ViewportController {
   /**
    * Compute zoom out by a factor (centered)
    */
-  private computeZoomOut(factor: number = 2): ViewportState {
+  private computeZoomOut(factor = 2): ViewportState {
     const prevTarget = this.getTarget();
     const newZoom = Math.max(this.config.minZoom, prevTarget.zoom / factor);
     return {
@@ -193,10 +185,7 @@ export class ViewportController {
    */
   private computeZoomTo(zoom: number): ViewportState {
     const prevTarget = this.getTarget();
-    const newZoom = Math.max(
-      this.config.minZoom,
-      Math.min(this.config.maxZoom, zoom),
-    );
+    const newZoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, zoom));
     return {
       ...prevTarget,
       zoom: newZoom,
@@ -208,25 +197,19 @@ export class ViewportController {
   /**
    * Compute wheel zoom centered on cursor position
    */
-  private computeWheelZoom(
-    zoomDelta: number,
-    cursorX: number,
-    cursorY: number,
-  ): ViewportState {
+  private computeWheelZoom(zoomDelta: number, cursorX: number, cursorY: number): ViewportState {
     const prevTarget = this.getTarget();
     const newZoom = Math.max(
       this.config.minZoom,
-      Math.min(this.config.maxZoom, prevTarget.zoom * (1 + zoomDelta)),
+      Math.min(this.config.maxZoom, prevTarget.zoom * (1 + zoomDelta))
     );
 
     const zoomRatio = newZoom / prevTarget.zoom;
     const mouseOffsetX = cursorX - 0.5;
     const mouseOffsetY = cursorY - 0.5;
 
-    const newPanX =
-      prevTarget.panX + (mouseOffsetX * (1 - 1 / zoomRatio)) / newZoom;
-    const newPanY =
-      prevTarget.panY + (mouseOffsetY * (1 - 1 / zoomRatio)) / newZoom;
+    const newPanX = prevTarget.panX + (mouseOffsetX * (1 - 1 / zoomRatio)) / newZoom;
+    const newPanY = prevTarget.panY + (mouseOffsetY * (1 - 1 / zoomRatio)) / newZoom;
 
     return {
       ...prevTarget,
@@ -253,16 +236,9 @@ export class ViewportController {
   /**
    * Compute pinch zoom centered on a point
    */
-  private computePinchZoom(
-    scale: number,
-    cx: number,
-    cy: number,
-  ): ViewportState {
+  private computePinchZoom(scale: number, cx: number, cy: number): ViewportState {
     const t = { ...this.getTarget() };
-    const newZoom = Math.max(
-      this.config.minZoom,
-      Math.min(this.config.maxZoom, t.zoom * scale),
-    );
+    const newZoom = Math.max(this.config.minZoom, Math.min(this.config.maxZoom, t.zoom * scale));
     const offsetX = cx - 0.5;
     const offsetY = cy - 0.5;
 
@@ -283,8 +259,8 @@ export class ViewportController {
     if (mutation.transitionSpeed !== undefined) return mutation.transitionSpeed;
 
     switch (mutation.type) {
-      case "pan.drag":
-      case "zoom.pinch":
+      case 'pan.drag':
+      case 'zoom.pinch':
         return 0;
       default:
         return this.config.animationSpeed;
@@ -324,12 +300,9 @@ export class ViewportController {
       }
 
       // Lerp toward target (exponential ease-out)
-      const newZoom =
-        this.state.zoom + (this.target.zoom - this.state.zoom) * t;
-      const newPanX =
-        this.state.panX + (this.target.panX - this.state.panX) * t;
-      const newPanY =
-        this.state.panY + (this.target.panY - this.state.panY) * t;
+      const newZoom = this.state.zoom + (this.target.zoom - this.state.zoom) * t;
+      const newPanX = this.state.panX + (this.target.panX - this.state.panX) * t;
+      const newPanY = this.state.panY + (this.target.panY - this.state.panY) * t;
 
       this.state = {
         zoom: newZoom,
