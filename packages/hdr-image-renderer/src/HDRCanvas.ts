@@ -181,7 +181,7 @@ export class HDRCanvas {
     this.viewportController.applyMutation({
       type: 'zoom.to',
       factor: zoom,
-      transitionSpeed: 1,
+      duration: 0,
     });
   }
 
@@ -195,7 +195,7 @@ export class HDRCanvas {
       type: 'pan.drag',
       deltaX: this.viewportController.getState().panX - x,
       deltaY: this.viewportController.getState().panY - y,
-      transitionSpeed: 1,
+      duration: 0,
     });
   }
 
@@ -219,7 +219,7 @@ export class HDRCanvas {
   resetViewport(animated = true): void {
     this.viewportController.applyMutation({
       type: 'reset',
-      transitionSpeed: animated ? undefined : 1,
+      duration: animated ? undefined : 0,
     });
   }
 
@@ -399,7 +399,7 @@ export class HDRCanvas {
         onZoomOut: () => this.zoomOut(),
         onZoomToFit: () => this.zoomToFit(),
         onZoomToActual: () => this.zoomToActual(),
-        onReset: () => this.viewportController.applyMutation({ type: 'reset', transitionSpeed: 1 }),
+        onReset: () => this.viewportController.applyMutation({ type: 'reset', duration: 0 }),
       },
       typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
     );

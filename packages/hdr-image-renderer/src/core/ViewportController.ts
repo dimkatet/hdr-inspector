@@ -6,7 +6,9 @@
  */
 
 import type {
+  EasingFunction,
   MutationListener,
+  TransitionEndListener,
   UpdateListener,
   ViewportConfig,
   ViewportMutation,
@@ -16,7 +18,16 @@ import type {
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
   minZoom: 0.1,
   maxZoom: 10,
-  animationSpeed: 0.15,
+  animationDuration: 200,
+  easing: 'ease-out',
+};
+
+/**
+ * Easing functions for smooth animations
+ */
+const EASINGS: Record<EasingFunction, (t: number) => number> = {
+  linear: (t) => t,
+  'ease-out': (t) => 1 - (1 - t) ** 2, // quadratic ease-out
 };
 
 /**
@@ -36,6 +47,12 @@ export class ViewportController {
   private config: Required<ViewportConfig>;
   private mutationListeners = new Set<MutationListener>();
   private updateListeners = new Set<UpdateListener>();
+  private transitionEndListeners = new Set<TransitionEndListener>();
+
+  // Animation state for time-based transitions
+  private animationStartState: ViewportState | null = null;
+  private animationStartTime: number | null = null;
+  private animationDuration = 0;
 
   constructor(config: Partial<ViewportConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -75,6 +92,16 @@ export class ViewportController {
    */
   private emitUpdate(state: ViewportState): void {
     for (const listener of this.updateListeners) {
+      listener(state);
+    }
+  }
+
+  /**
+   * Notify all transition end listeners when an animation completes.
+   * Not called for instant transitions (duration: 0).
+   */
+  private emitTransitionEnd(state: ViewportState): void {
+    for (const listener of this.transitionEndListeners) {
       listener(state);
     }
   }
@@ -147,6 +174,20 @@ export class ViewportController {
 
     return () => {
       this.updateListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Subscribe to transition end events.
+   * Fires when an animated transition completes (not called for instant transitions).
+   * Useful for UI updates that should happen after animation finishes.
+   * @returns Unsubscribe function
+   */
+  onTransitionEnd(listener: TransitionEndListener): () => void {
+    this.transitionEndListeners.add(listener);
+
+    return () => {
+      this.transitionEndListeners.delete(listener);
     };
   }
 
@@ -251,58 +292,68 @@ export class ViewportController {
   }
 
   /**
-   * Get transition speed for a mutation.
-   * Returns 0 for instant transitions (drag, pinch), or config speed for animated ones.
-   * Can be overridden per-mutation via transitionSpeed property.
+   * Get animation duration for a mutation in milliseconds.
+   * Returns 0 for instant transitions (drag, pinch), or config duration for animated ones.
+   * Can be overridden per-mutation via duration property.
    */
-  private getTransitionSpeed(mutation: ViewportMutation): number {
-    if (mutation.transitionSpeed !== undefined) return mutation.transitionSpeed;
+  private getDuration(mutation: ViewportMutation): number {
+    if (mutation.duration !== undefined) return mutation.duration;
 
     switch (mutation.type) {
       case 'pan.drag':
       case 'zoom.pinch':
         return 0;
       default:
-        return this.config.animationSpeed;
+        return this.config.animationDuration;
     }
   }
 
   /**
-   * Start transition animation loop.
-   * Uses linear interpolation (lerp) to smoothly animate from current state to target.
-   * If transitionSpeed is 0, applies state instantly without animation.
+   * Start time-based transition animation.
+   * Uses performance.now() for frame-rate independent animation.
+   * If duration is 0, applies state instantly without animation.
    */
   private startTransition(mutation: ViewportMutation): void {
-    const t = this.getTransitionSpeed(mutation);
+    const duration = this.getDuration(mutation);
 
     // Instant transition
-    if (t === 0) {
+    if (duration === 0) {
       this.state = { ...this.target };
       this.animationId = null;
+      this.animationStartState = null;
+      this.animationStartTime = null;
       this.emitUpdate(this.state);
       return;
     }
 
-    // Don't start new animation if one is already running
+    // Start new animation from current state
+    // (if already animating, this restarts from current interpolated position)
+    this.animationStartState = { ...this.state };
+    this.animationStartTime = performance.now();
+    this.animationDuration = duration;
+
+    // Don't start new rAF loop if one is already running
     if (this.animationId !== null) return;
 
-    const animate = () => {
-      // Check if we're close enough to target to stop
-      const dZoom = Math.abs(this.target.zoom - this.state.zoom);
-      const dPanX = Math.abs(this.target.panX - this.state.panX);
-      const dPanY = Math.abs(this.target.panY - this.state.panY);
+    const easing = EASINGS[this.config.easing];
 
-      if (dZoom < 0.001 && dPanX < 0.0001 && dPanY < 0.0001) {
-        this.state = { ...this.target };
+    const animate = (currentTime: number) => {
+      if (this.animationStartTime === null || this.animationStartState === null) {
         this.animationId = null;
-        this.emitUpdate(this.state);
         return;
       }
 
-      // Lerp toward target (exponential ease-out)
-      const newZoom = this.state.zoom + (this.target.zoom - this.state.zoom) * t;
-      const newPanX = this.state.panX + (this.target.panX - this.state.panX) * t;
-      const newPanY = this.state.panY + (this.target.panY - this.state.panY) * t;
+      const elapsed = currentTime - this.animationStartTime;
+      const progress = Math.min(elapsed / this.animationDuration, 1);
+      const easedProgress = easing(progress);
+
+      const startState = this.animationStartState;
+      const newZoom =
+        startState.zoom + (this.target.zoom - startState.zoom) * easedProgress;
+      const newPanX =
+        startState.panX + (this.target.panX - startState.panX) * easedProgress;
+      const newPanY =
+        startState.panY + (this.target.panY - startState.panY) * easedProgress;
 
       this.state = {
         zoom: newZoom,
@@ -311,7 +362,18 @@ export class ViewportController {
       };
 
       this.emitUpdate(this.state);
-      this.animationId = requestAnimationFrame(animate);
+
+      if (progress < 1) {
+        this.animationId = requestAnimationFrame(animate);
+      } else {
+        // Animation complete - snap to exact target
+        this.state = { ...this.target };
+        this.animationId = null;
+        this.animationStartState = null;
+        this.animationStartTime = null;
+        this.emitUpdate(this.state);
+        this.emitTransitionEnd(this.state);
+      }
     };
 
     this.animationId = requestAnimationFrame(animate);
@@ -348,5 +410,6 @@ export class ViewportController {
     this.stopAnimation();
     this.mutationListeners.clear();
     this.updateListeners.clear();
+    this.transitionEndListeners.clear();
   }
 }

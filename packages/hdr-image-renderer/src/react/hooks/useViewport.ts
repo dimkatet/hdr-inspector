@@ -66,7 +66,8 @@ export function useViewport(
     instanceRef,
     viewportConfig.minZoom,
     viewportConfig.maxZoom,
-    viewportConfig.animationSpeed,
+    viewportConfig.animationDuration,
+    viewportConfig.easing,
     keyboard,
   ]);
 

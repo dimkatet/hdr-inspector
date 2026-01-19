@@ -70,12 +70,12 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         onError={handleError}
         onZoom={handleZoom}
         interactions={{
-          wheel: { sensitivity: 0.001 },
+          wheel: { sensitivity: 0.0015 },
           drag: true,
           touch: true,
           minZoom: 0.5,
           maxZoom: 20,
-          animationSpeed: 0.15,
+          animationDuration: 100,
           keyboard: true, // Enable keyboard controls with default settings
         }}
         style={{

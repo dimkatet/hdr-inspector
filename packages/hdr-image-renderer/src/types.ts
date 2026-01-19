@@ -79,20 +79,31 @@ export type MutationListener = (
   target: ViewportState
 ) => void;
 
+/**
+ * Listener for animation completion events.
+ * Called when an animated transition finishes (not called for instant transitions).
+ */
+export type TransitionEndListener = (state: ViewportState) => void;
+
+/**
+ * Easing function for animations
+ */
+export type EasingFunction = 'linear' | 'ease-out';
+
 export type ViewportMutation =
-  | { type: 'zoom.in'; transitionSpeed?: number; factor?: number }
-  | { type: 'zoom.out'; transitionSpeed?: number; factor?: number }
-  | { type: 'zoom.to'; transitionSpeed?: number; factor: number }
+  | { type: 'zoom.in'; duration?: number; factor?: number }
+  | { type: 'zoom.out'; duration?: number; factor?: number }
+  | { type: 'zoom.to'; duration?: number; factor: number }
   | {
       type: 'zoom.wheel';
-      transitionSpeed?: number;
+      duration?: number;
       zoomDelta: number;
       cursorX: number;
       cursorY: number;
     }
   | {
       type: 'pan.drag';
-      transitionSpeed?: number;
+      duration?: number;
       deltaX: number;
       deltaY: number;
     }
@@ -101,9 +112,9 @@ export type ViewportMutation =
       scale: number;
       cx: number;
       cy: number;
-      transitionSpeed?: number;
+      duration?: number;
     }
-  | { type: 'reset'; transitionSpeed?: number };
+  | { type: 'reset'; duration?: number };
 
 /**
  * Viewport state for zoom/pan
@@ -125,8 +136,10 @@ export interface ViewportConfig {
   minZoom?: number;
   /** Maximum zoom level (default: 10) */
   maxZoom?: number;
-  /** Animation smoothness 0-1, higher = faster (default: 0.15) */
-  animationSpeed?: number;
+  /** Animation duration in milliseconds (default: 200) */
+  animationDuration?: number;
+  /** Easing function for animations (default: 'ease-out') */
+  easing?: EasingFunction;
 }
 
 /**
