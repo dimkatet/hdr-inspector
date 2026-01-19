@@ -1,19 +1,14 @@
 // Core exports for vanilla JS API
 
 export { HDRCanvas } from './HDRCanvas';
-export { decodeRadianceHDR, DecodeError } from './decoders';
+export { decodeRadianceHDR, DecodeError } from './image';
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
-  ViewportController,
-  MouseHandler,
-  TouchHandler,
-  KeyboardHandler,
   type HDRCapabilities,
-  type MouseCallbacks,
-  type TouchCallbacks,
-  type KeyboardCallbacks,
-} from './core';
+} from './utils';
+export { ViewportController } from './viewport';
+export { MouseHandler, TouchHandler, KeyboardHandler } from './interaction';
 export type {
   HDRCanvasOptions,
   RenderState,

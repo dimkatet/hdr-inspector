@@ -93,7 +93,15 @@ export type EasingFunction = 'linear' | 'ease-out';
 /**
  * Source of viewport mutation (where it originated from)
  */
-export type MutationSource = 'wheel' | 'pinch' | 'drag' | 'keyboard' | 'button' | 'dblclick' | 'doubletap' | 'programmatic';
+export type MutationSource =
+  | 'wheel'
+  | 'pinch'
+  | 'drag'
+  | 'keyboard'
+  | 'button'
+  | 'dblclick'
+  | 'doubletap'
+  | 'programmatic';
 
 /**
  * Viewport mutations - primitive operations on viewport state

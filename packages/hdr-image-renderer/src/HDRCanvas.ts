@@ -1,17 +1,14 @@
 /**
- * HDRCanvas - Main API
+ * HDRCanvas - Main API (Facade)
  *
  * High-level interface for rendering HDR images with WebGPU.
- * Wraps WebGPURenderer with a simple imperative API.
+ * Coordinates specialized components for rendering, viewport control, and interactions.
  */
 
-import { throttle } from 'throttle-debounce';
-import { KeyboardHandler } from './core/KeyboardHandler';
-import { MouseHandler } from './core/MouseHandler';
-import { TouchHandler } from './core/TouchHandler';
-import { ViewportController } from './core/ViewportController';
-import { decodeRadianceHDR } from './decoders';
-import { WebGPURenderer } from './renderer';
+import { ImageLoader } from './image';
+import { InteractionManager } from './interaction';
+import { CanvasResizer, RenderSettings } from './render';
+import { WebGPURenderer } from './render';
 import type {
   HDRCanvasOptions,
   ImageInfo,
@@ -22,30 +19,55 @@ import type {
   ViewportConfig,
   ViewportState,
 } from './types';
+import { ViewportCommands, ViewportController, ViewportSubscriptions } from './viewport';
 
 export class HDRCanvas {
   private canvas: HTMLCanvasElement;
-  private options: Required<HDRCanvasOptions>;
   private renderer: WebGPURenderer;
-  private initialized = false;
   private viewportController: ViewportController;
-  private resizeObserver: ResizeObserver | null = null;
+  private initialized = false;
+
+  // Focused components
+  private settings: RenderSettings;
+  private commands: ViewportCommands;
+  private interactions: InteractionManager;
+  private resizer: CanvasResizer;
+  private subscriptions: ViewportSubscriptions;
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
     this.canvas = canvas;
-    this.options = {
-      hdrMode: options.hdrMode ?? false,
-      exposure: options.exposure ?? 0,
-      toneMapping: options.toneMapping ?? 'aces',
-      colorSpace: options.colorSpace ?? 'display-p3',
-      visualizationMode: options.visualizationMode ?? 'rgb',
-      transparent: options.transparent ?? false,
-    };
 
-    this.renderer = new WebGPURenderer(canvas, { transparent: this.options.transparent });
+    // Initialize core components
+    this.renderer = new WebGPURenderer(canvas, { transparent: options.transparent });
     this.viewportController = new ViewportController();
     this.viewportController.onUpdate(() => this.render());
+
+    // Initialize focused components
+    this.settings = new RenderSettings(options, () => this.render());
+
+    this.commands = new ViewportCommands(
+      this.viewportController,
+      () => this.renderer.getImageDimensions(),
+      () => {
+        const rect = this.canvas.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }
+    );
+
+    this.interactions = new InteractionManager(this.canvas, this.viewportController, () => ({
+      zoomIn: () => this.zoomIn(),
+      zoomOut: () => this.zoomOut(),
+      zoomToFit: () => this.zoomToFit(),
+      zoomToActual: () => this.zoomToActual(),
+    }));
+
+    this.resizer = new CanvasResizer(this.canvas, () => this.forceRender());
+    this.subscriptions = new ViewportSubscriptions(this.viewportController);
   }
+
+  // ============================================================
+  // Initialization & Loading
+  // ============================================================
 
   /**
    * Initialize WebGPU context (must be called before loading images)
@@ -73,7 +95,7 @@ export class HDRCanvas {
    * Load Radiance HDR file from ArrayBuffer
    */
   async loadRadianceHDR(buffer: ArrayBuffer): Promise<void> {
-    const imageData = decodeRadianceHDR(buffer);
+    const imageData = await ImageLoader.decodeRadianceHDR(buffer);
     return this.loadImage(imageData);
   }
 
@@ -81,90 +103,65 @@ export class HDRCanvas {
    * Load file with auto-detection of format
    */
   async loadFile(file: File): Promise<void> {
-    const buffer = await file.arrayBuffer();
-    const ext = file.name.split('.').pop()?.toLowerCase();
-
-    if (ext === 'hdr' || ext === 'pic') {
-      return this.loadRadianceHDR(buffer);
-    }
-
-    throw new Error(`Unsupported file format: ${ext}`);
+    const imageData = await ImageLoader.decodeFile(file);
+    return this.loadImage(imageData);
   }
+
+  // ============================================================
+  // Render Settings
+  // ============================================================
 
   /**
    * Set exposure value in stops (EV)
    */
   setExposure(ev: number): void {
-    this.options.exposure = ev;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.setExposure(ev);
   }
 
   /**
    * Set tone mapping operator
    */
   setToneMapping(operator: 'none' | 'reinhard' | 'aces'): void {
-    this.options.toneMapping = operator;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.setToneMapping(operator);
   }
 
   /**
    * Enable/disable HDR mode
    */
   setHDRMode(enabled: boolean): void {
-    this.options.hdrMode = enabled;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.setHDRMode(enabled);
   }
 
   /**
    * Set color space for output
    */
   setColorSpace(colorSpace: 'srgb' | 'display-p3' | 'rec2020'): void {
-    this.options.colorSpace = colorSpace;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.setColorSpace(colorSpace);
   }
 
   /**
    * Set visualization mode
    */
   setVisualizationMode(mode: 'rgb' | 'luminance' | 'clipping'): void {
-    this.options.visualizationMode = mode;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.setVisualizationMode(mode);
   }
 
   /**
    * Get current render state
    */
   getRenderState(): RenderState {
-    return { ...this.options };
+    return this.settings.getState();
   }
 
   /**
    * Batch update render options
    */
   updateOptions(options: Partial<HDRCanvasOptions>): void {
-    if (options.exposure !== undefined) this.options.exposure = options.exposure;
-    if (options.toneMapping !== undefined) this.options.toneMapping = options.toneMapping;
-    if (options.hdrMode !== undefined) this.options.hdrMode = options.hdrMode;
-    if (options.colorSpace !== undefined) this.options.colorSpace = options.colorSpace;
-    if (options.visualizationMode !== undefined)
-      this.options.visualizationMode = options.visualizationMode;
-    if (this.initialized) {
-      this.render();
-    }
+    this.settings.updateOptions(options);
   }
 
   // ============================================================
-  // Viewport methods
+  // Viewport State
   // ============================================================
 
   /**
@@ -175,16 +172,22 @@ export class HDRCanvas {
   }
 
   /**
+   * Update viewport controller configuration
+   */
+  setViewportConfig(config: Partial<ViewportConfig>): void {
+    this.viewportController.updateConfig(config);
+  }
+
+  // ============================================================
+  // Viewport Commands
+  // ============================================================
+
+  /**
    * Set zoom level (instant, no animation)
    * @param zoom Zoom level (1.0 = 100%, 2.0 = 200%)
    */
   setZoom(zoom: number): void {
-    this.viewportController.applyMutation({
-      type: 'zoom',
-      zoom,
-      source: 'programmatic',
-      duration: 0,
-    });
+    this.commands.setZoom(zoom);
   }
 
   /**
@@ -193,27 +196,14 @@ export class HDRCanvas {
    * @param y Pan Y in normalized coordinates
    */
   setPan(x: number, y: number): void {
-    const current = this.viewportController.getState();
-    this.viewportController.applyMutation({
-      type: 'pan',
-      deltaX: x - current.panX,
-      deltaY: y - current.panY,
-      source: 'programmatic',
-      duration: 0,
-    });
+    this.commands.setPan(x, y);
   }
 
   /**
    * Set complete viewport state (instant, no animation)
    */
   setViewport(viewport: Partial<ViewportState>): void {
-    if (viewport.zoom !== undefined) {
-      this.setZoom(viewport.zoom);
-    }
-    if (viewport.panX !== undefined || viewport.panY !== undefined) {
-      const current = this.viewportController.getState();
-      this.setPan(viewport.panX ?? current.panX, viewport.panY ?? current.panY);
-    }
+    this.commands.setViewport(viewport);
   }
 
   /**
@@ -221,11 +211,7 @@ export class HDRCanvas {
    * @param animated - Whether to animate the transition (default: true)
    */
   resetViewport(animated = true): void {
-    this.viewportController.applyMutation({
-      type: 'reset',
-      source: 'programmatic',
-      duration: animated ? undefined : 0,
-    });
+    this.commands.reset(animated);
   }
 
   /**
@@ -233,14 +219,7 @@ export class HDRCanvas {
    * @param factor - Zoom multiplier (default: 2)
    */
   zoomIn(factor = 2): void {
-    const currentZoom = this.viewportController.getState().zoom;
-    const newZoom = currentZoom * factor;
-
-    this.viewportController.applyMutation({
-      type: 'zoom',
-      zoom: newZoom,
-      source: 'button',
-    });
+    this.commands.zoomIn(factor);
   }
 
   /**
@@ -248,14 +227,7 @@ export class HDRCanvas {
    * @param factor - Zoom divisor (default: 2)
    */
   zoomOut(factor = 2): void {
-    const currentZoom = this.viewportController.getState().zoom;
-    const newZoom = currentZoom / factor;
-
-    this.viewportController.applyMutation({
-      type: 'zoom',
-      zoom: newZoom,
-      source: 'button',
-    });
+    this.commands.zoomOut(factor);
   }
 
   /**
@@ -263,11 +235,7 @@ export class HDRCanvas {
    * Shows the entire image with maximum size that fits
    */
   zoomToFit(): void {
-    this.viewportController.applyMutation({
-      type: 'zoom',
-      zoom: 1,
-      source: 'button',
-    });
+    this.commands.zoomToFit();
   }
 
   /**
@@ -275,38 +243,11 @@ export class HDRCanvas {
    * One image pixel = one screen pixel
    */
   zoomToActual(): void {
-    const imageDims = this.renderer.getImageDimensions();
-    if (imageDims.width === 0 || imageDims.height === 0) return;
-
-    const canvasRect = this.canvas.getBoundingClientRect();
-    if (canvasRect.width === 0 || canvasRect.height === 0) return;
-
-    const imageAspect = imageDims.width / imageDims.height;
-    const canvasAspect = canvasRect.width / canvasRect.height;
-
-    const fitScale =
-      imageAspect > canvasAspect
-        ? canvasRect.width / imageDims.width
-        : canvasRect.height / imageDims.height;
-
-    const actualZoom = 1 / fitScale;
-
-    this.viewportController.applyMutation({
-      type: 'zoom',
-      zoom: actualZoom,
-      source: 'button',
-    });
-  }
-
-  /**
-   * Update viewport controller configuration
-   */
-  setViewportConfig(config: Partial<ViewportConfig>): void {
-    this.viewportController.updateConfig(config);
+    this.commands.zoomToActual();
   }
 
   // ============================================================
-  // Event subscriptions
+  // Event Subscriptions
   // ============================================================
 
   /**
@@ -316,20 +257,7 @@ export class HDRCanvas {
    * @returns Unsubscribe function
    */
   onZoom(callback: (zoom: number, state: ViewportState) => void, throttleMs = 100): () => void {
-    const throttledCallback = throttle(throttleMs, callback);
-
-    return this.viewportController.onMutation((mutation, _prev, target) => {
-      if (mutation.type === 'zoom') {
-        // Throttle wheel/pinch gestures, immediate for button/programmatic
-        if (mutation.source === 'wheel' || mutation.source === 'pinch') {
-          throttledCallback(target.zoom, target);
-        } else {
-          callback(target.zoom, target);
-        }
-      } else if (mutation.type === 'reset') {
-        callback(target.zoom, target);
-      }
-    });
+    return this.subscriptions.onZoom(callback, throttleMs);
   }
 
   /**
@@ -338,7 +266,7 @@ export class HDRCanvas {
    * @returns Unsubscribe function
    */
   onMutation(listener: MutationListener): () => void {
-    return this.viewportController.onMutation(listener);
+    return this.subscriptions.onMutation(listener);
   }
 
   /**
@@ -347,7 +275,7 @@ export class HDRCanvas {
    * @returns Unsubscribe function
    */
   onViewportChange(callback: (state: ViewportState) => void): () => void {
-    return this.viewportController.onUpdate(callback);
+    return this.subscriptions.onUpdate(callback);
   }
 
   // ============================================================
@@ -360,123 +288,11 @@ export class HDRCanvas {
    * @returns Cleanup function to detach all listeners
    */
   attachInteractions(options: InteractionOptions = {}): () => void {
-    const { wheel, drag, touch, keyboard, ...viewportConfig } = options;
-
-    // Apply viewport config
-    if (Object.keys(viewportConfig).length > 0) {
-      this.viewportController.updateConfig(viewportConfig);
-    }
-
-    // Parse wheel config
-    const wheelEnabled = typeof wheel === 'boolean' ? wheel : (wheel?.enabled ?? true);
-    const wheelSensitivity = typeof wheel === 'object' ? (wheel.sensitivity ?? 0.001) : 0.001;
-
-    // Create mouse handler with config
-    const mouseHandler = new MouseHandler(
-      this.canvas,
-      {
-        onWheel: (deltaY, cursorX, cursorY) => {
-          // Calculate zoom from wheel delta
-          const zoomDelta = -deltaY * wheelSensitivity;
-          const currentZoom = this.viewportController.getState().zoom;
-          const newZoom = currentZoom * Math.exp(zoomDelta);
-
-          this.viewportController.applyMutation({
-            type: 'zoom',
-            zoom: newZoom,
-            centerX: cursorX,
-            centerY: cursorY,
-            source: 'wheel',
-          });
-        },
-        onDrag: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
-            type: 'pan',
-            deltaX,
-            deltaY,
-            source: 'drag',
-          }),
-        onDblClick: () =>
-          this.viewportController.applyMutation({
-            type: 'reset',
-            source: 'dblclick',
-          }),
-      },
-      { wheel: wheelEnabled, drag }
-    );
-
-    // Create touch handler with config
-    const touchHandler = new TouchHandler(
-      this.canvas,
-      {
-        onPan: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
-            type: 'pan',
-            deltaX,
-            deltaY,
-            source: 'drag',
-          }),
-        onPinch: (scaleDelta, centerX, centerY) => {
-          // Calculate new zoom from pinch scale
-          const currentZoom = this.viewportController.getState().zoom;
-          const newZoom = currentZoom * scaleDelta;
-
-          this.viewportController.applyMutation({
-            type: 'zoom',
-            zoom: newZoom,
-            centerX,
-            centerY,
-            source: 'pinch',
-          });
-        },
-        onDoubleTap: () =>
-          this.viewportController.applyMutation({
-            type: 'reset',
-            source: 'doubletap',
-          }),
-      },
-      { enabled: touch }
-    );
-
-    // Create keyboard handler with config
-    const keyboardHandler = new KeyboardHandler(
-      this.canvas,
-      {
-        onPan: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
-            type: 'pan',
-            deltaX,
-            deltaY,
-            source: 'keyboard',
-          }),
-        onZoomIn: () => this.zoomIn(),
-        onZoomOut: () => this.zoomOut(),
-        onZoomToFit: () => this.zoomToFit(),
-        onZoomToActual: () => this.zoomToActual(),
-        onReset: () =>
-          this.viewportController.applyMutation({
-            type: 'reset',
-            source: 'keyboard',
-            duration: 0,
-          }),
-      },
-      typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
-    );
-
-    const detachMouse = mouseHandler.attach();
-    const detachTouch = touchHandler.attach();
-    const detachKeyboard = keyboardHandler.attach();
-
-    // Return cleanup function
-    return () => {
-      detachMouse();
-      detachTouch();
-      detachKeyboard();
-    };
+    return this.interactions.attach(options);
   }
 
   // ============================================================
-  // Auto-resize
+  // Auto-Resize
   // ============================================================
 
   /**
@@ -485,39 +301,14 @@ export class HDRCanvas {
    * @returns Cleanup function to disable auto-resize
    */
   enableAutoResize(): () => void {
-    if (this.resizeObserver) {
-      return () => this.disableAutoResize();
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-
-    this.resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const pixelWidth = Math.round(width * dpr);
-        const pixelHeight = Math.round(height * dpr);
-
-        if (this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) {
-          this.canvas.width = pixelWidth;
-          this.canvas.height = pixelHeight;
-          this.forceRender();
-        }
-      }
-    });
-
-    this.resizeObserver.observe(this.canvas);
-
-    return () => this.disableAutoResize();
+    return this.resizer.enable();
   }
 
   /**
    * Disable automatic canvas resize
    */
   disableAutoResize(): void {
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
-      this.resizeObserver = null;
-    }
+    this.resizer.disable();
   }
 
   // ============================================================
@@ -530,22 +321,9 @@ export class HDRCanvas {
   private render(): void {
     if (!this.initialized) return;
 
-    this.renderWithViewport(this.viewportController.getState());
-  }
-
-  /**
-   * Render with explicit viewport state (avoids extra getState() call)
-   */
-  private renderWithViewport(viewport: ViewportState): void {
-    if (!this.initialized) return;
-
     this.renderer.render({
-      exposure: this.options.exposure,
-      toneMapping: this.options.toneMapping,
-      visualizationMode: this.options.visualizationMode,
-      hdrMode: this.options.hdrMode,
-      colorSpace: this.options.colorSpace,
-      viewport,
+      ...this.settings.getState(),
+      viewport: this.viewportController.getState(),
     });
   }
 
@@ -581,7 +359,8 @@ export class HDRCanvas {
    * Cleanup GPU resources
    */
   destroy(): void {
-    this.disableAutoResize();
+    this.resizer.disable();
+    this.interactions.detach();
     this.viewportController.destroy();
     if (this.initialized) {
       this.renderer.destroy();
