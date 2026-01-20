@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { HDRCanvas } from '../../HDRCanvas';
-import type { ImageInfo, LinearImageData } from '../../types';
+import type { ImageData, ImageInfo } from '../../types';
 
 export interface UseImageLoaderOptions {
   onLoad?: (info: ImageInfo) => void;
@@ -12,11 +12,11 @@ export type { ImageInfo } from '../../types';
 
 /**
  * Hook for loading images into HDRCanvas.
- * Handles both LinearImageData and File inputs.
+ * Handles ImageData (LinearImageData or EncodedImageData).
  */
 export function useImageLoader(
   instanceRef: React.RefObject<HDRCanvas | null>,
-  image: LinearImageData | File | undefined,
+  image: ImageData | undefined,
   options: UseImageLoaderOptions
 ): void {
   const { onLoad, onError } = options;
@@ -37,10 +37,8 @@ export function useImageLoader(
     const onLoad = onLoadRef.current;
     const onError = onErrorRef.current;
 
-    const loadPromise =
-      image instanceof File ? instance.loadFile(image) : instance.loadImage(image);
-
-    loadPromise
+    instance
+      .loadImage(image)
       .then(() => {
         const info = instance.control.getImageInfo();
         onLoad?.(info);

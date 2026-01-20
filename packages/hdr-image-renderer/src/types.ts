@@ -6,6 +6,11 @@
  */
 
 /**
+ * Transfer function for encoded image data
+ */
+export type TransferFunction = 'linear' | 'srgb' | 'pq';
+
+/**
  * Linear RGB image data
  * - Scene-referred, no transfer function applied
  * - Values may exceed 1.0
@@ -20,12 +25,42 @@ export interface LinearImageData {
   data: Float32Array;
   /** Number of channels (3 for RGB, 4 for RGBA) */
   channels: 3 | 4;
+  /** Transfer function (always 'linear' for this type) */
+  transferFunction: 'linear';
   /** Optional metadata */
   metadata?: {
     exposure?: number;
     colorSpace?: string;
   };
 }
+
+/**
+ * Encoded RGB(A) image data
+ * - Display-referred with transfer function applied
+ * - Raw uint8/uint16 values (0-255 or 0-65535)
+ * - GPU will normalize and apply EOTF to convert to linear
+ */
+export interface EncodedImageData {
+  /** Image width in pixels */
+  width: number;
+  /** Image height in pixels */
+  height: number;
+  /** Encoded RGB(A) data (raw values, not normalized) */
+  data: Uint8Array | Uint16Array;
+  /** Number of channels (3 for RGB, 4 for RGBA) */
+  channels: 3 | 4;
+  /** Transfer function applied to the data */
+  transferFunction: 'srgb' | 'pq';
+  /** Optional metadata */
+  metadata?: {
+    colorSpace?: string;
+  };
+}
+
+/**
+ * Union type for all supported image data formats
+ */
+export type ImageData = LinearImageData | EncodedImageData;
 
 /**
  * Tone mapping operators

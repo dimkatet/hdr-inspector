@@ -17,7 +17,7 @@
  * - Exposure header is ignored (we control exposure explicitly)
  */
 
-import type { LinearImageData } from '../types';
+import type { LinearImageData } from '@dimkatet/hdr-image-renderer';
 
 /**
  * Error thrown when decoding fails
@@ -85,6 +85,7 @@ export function decodeRadianceHDR(arrayBuffer: ArrayBuffer): LinearImageData {
     height,
     data: rgbData,
     channels,
+    transferFunction: 'linear' as const,
   };
 }
 

@@ -5,7 +5,14 @@
  * Supports native HDR output via PQ encoding when available.
  */
 
-import type { ColorSpace, LinearImageData, ViewportState } from '../types';
+import type {
+  ColorSpace,
+  ImageData,
+  LinearImageData,
+  EncodedImageData,
+  TransferFunction,
+  ViewportState,
+} from '../types';
 import { fragmentShaderWGSL, vertexShaderWGSL } from './shaders';
 
 export interface WebGPURenderOptions {
@@ -36,6 +43,8 @@ export class WebGPURenderer {
   private imageWidth = 1;
   private imageHeight = 1;
   private transparent = false;
+  private currentTextureFormat: GPUTextureFormat = 'rgba32float';
+  private currentTransferFunction: TransferFunction = 'linear';
 
   constructor(canvas: HTMLCanvasElement, options: WebGPURendererOptions = {}) {
     this.canvas = canvas;
@@ -57,7 +66,12 @@ export class WebGPURenderer {
       throw new Error('Failed to get WebGPU adapter');
     }
 
-    this.device = await adapter.requestDevice();
+    // Request device with optional features for better texture format support
+    const requiredFeatures: GPUFeatureName[] = ['texture-formats-tier1'];
+
+    this.device = await adapter.requestDevice({
+      requiredFeatures,
+    });
 
     // Get canvas context
     const context = this.canvas.getContext('webgpu');
@@ -132,7 +146,8 @@ export class WebGPURenderer {
       });
     }
 
-    // Create sampler
+    // Create sampler (will be updated when texture format changes)
+    // Start with non-filtering for rgba32float compatibility
     this.sampler = this.device.createSampler({
       magFilter: 'nearest',
       minFilter: 'nearest',
@@ -140,9 +155,9 @@ export class WebGPURenderer {
       addressModeV: 'clamp-to-edge',
     });
 
-    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace, zoom, panX, panY, imageAspect, canvasAspect, transparent)
+    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace, zoom, panX, panY, imageAspect, canvasAspect, transparent, inputTransferFunction)
     this.uniformBuffer = this.device.createBuffer({
-      size: 44, // 11 floats * 4 bytes = 44 bytes
+      size: 48, // 12 floats * 4 bytes = 48 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -235,14 +250,17 @@ export class WebGPURenderer {
   }
 
   /**
-   * Upload HDR image to GPU texture
+   * Upload image to GPU texture
+   * Supports both LinearImageData (Float32Array) and EncodedImageData (Uint8Array/Uint16Array)
    */
-  uploadImage(image: LinearImageData): void {
+  uploadImage(image: ImageData): void {
     console.log('[WebGPURenderer] Uploading image:', image.width, 'x', image.height);
+    console.log('[WebGPURenderer] Transfer function:', image.transferFunction);
 
-    // Store image dimensions for aspect ratio calculation
+    // Store image dimensions and transfer function
     this.imageWidth = image.width;
     this.imageHeight = image.height;
+    this.currentTransferFunction = image.transferFunction;
 
     console.log('[WebGPURenderer] Canvas size:', this.canvas.width, 'x', this.canvas.height);
 
@@ -251,19 +269,34 @@ export class WebGPURenderer {
       this.texture.destroy();
     }
 
-    // Convert RGB to RGBA (WebGPU requires rgba16float for HDR)
-    const rgbaData = new Float32Array(image.width * image.height * 4);
-    for (let i = 0; i < image.width * image.height; i++) {
-      rgbaData[i * 4] = image.data[i * 3]; // R
-      rgbaData[i * 4 + 1] = image.data[i * 3 + 1]; // G
-      rgbaData[i * 4 + 2] = image.data[i * 3 + 2]; // B
-      rgbaData[i * 4 + 3] = 1.0; // A
+    // Determine texture format and prepare data based on input type
+    let textureFormat: GPUTextureFormat;
+    let rgbaData: Float32Array | Uint8Array | Uint16Array;
+    let bytesPerChannel: number;
+
+    if (image.data instanceof Float32Array) {
+      // Linear float data
+      textureFormat = 'rgba32float';
+      bytesPerChannel = 4;
+      rgbaData = this.convertToRGBA(image as LinearImageData);
+    } else if (image.data instanceof Uint16Array) {
+      textureFormat = 'rgba16unorm';
+      bytesPerChannel = 2;
+      rgbaData = this.convertToRGBA(image as EncodedImageData);
+    } else {
+      // 8-bit encoded data (Uint8Array)
+      textureFormat = 'rgba8unorm';
+      bytesPerChannel = 1;
+      rgbaData = this.convertToRGBA(image as EncodedImageData);
     }
 
-    // Create texture (use rgba32float for Float32Array compatibility)
+    this.currentTextureFormat = textureFormat;
+    console.log('[WebGPURenderer] Texture format:', textureFormat);
+
+    // Create texture
     this.texture = this.device.createTexture({
       size: { width: image.width, height: image.height },
-      format: 'rgba32float',
+      format: textureFormat,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
 
@@ -273,7 +306,7 @@ export class WebGPURenderer {
       rgbaData.buffer,
       {
         offset: 0,
-        bytesPerRow: image.width * 4 * 4, // 4 channels * 4 bytes (f32)
+        bytesPerRow: image.width * 4 * bytesPerChannel,
         rowsPerImage: image.height,
       },
       { width: image.width, height: image.height }
@@ -286,6 +319,53 @@ export class WebGPURenderer {
   }
 
   /**
+   * Convert RGB(A) data to RGBA format
+   */
+  private convertToRGBA(
+    image: LinearImageData | EncodedImageData
+  ): Float32Array | Uint8Array | Uint16Array {
+    if (image.channels === 4) {
+      // Already RGBA
+      return image.data;
+    }
+
+    // RGB → RGBA conversion
+    const pixelCount = image.width * image.height;
+
+    if (image.data instanceof Float32Array) {
+      const rgba = new Float32Array(pixelCount * 4);
+      for (let i = 0; i < pixelCount; i++) {
+        rgba[i * 4] = image.data[i * 3]; // R
+        rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
+        rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
+        rgba[i * 4 + 3] = 1.0; // A
+      }
+      return rgba;
+    }
+
+    if (image.data instanceof Uint16Array) {
+      const rgba = new Uint16Array(pixelCount * 4);
+      for (let i = 0; i < pixelCount; i++) {
+        rgba[i * 4] = image.data[i * 3]; // R
+        rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
+        rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
+        rgba[i * 4 + 3] = 65535; // A (max value for uint16)
+      }
+      return rgba;
+    }
+
+    // Uint8Array
+    const rgba = new Uint8Array(pixelCount * 4);
+    for (let i = 0; i < pixelCount; i++) {
+      rgba[i * 4] = image.data[i * 3]; // R
+      rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
+      rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
+      rgba[i * 4 + 3] = 255; // A (max value for uint8)
+    }
+    return rgba;
+  }
+
+  /**
    * Create render pipeline
    */
   private createPipeline(): void {
@@ -294,18 +374,41 @@ export class WebGPURenderer {
       code: `${vertexShaderWGSL}\n\n${fragmentShaderWGSL}`,
     });
 
+    // Determine sample type based on texture format
+    const sampleType =
+      this.currentTextureFormat === 'rgba32float' ? 'unfilterable-float' : 'float';
+    const samplerType = this.currentTextureFormat === 'rgba32float' ? 'non-filtering' : 'filtering';
+
+    // Update sampler if texture format changed
+    if (this.currentTextureFormat !== 'rgba32float') {
+      this.sampler = this.device.createSampler({
+        magFilter: 'linear',
+        minFilter: 'linear',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+    } else {
+      // Recreate non-filtering sampler for rgba32float
+      this.sampler = this.device.createSampler({
+        magFilter: 'nearest',
+        minFilter: 'nearest',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+    }
+
     // Create bind group layout
     const bindGroupLayout = this.device.createBindGroupLayout({
       entries: [
         {
           binding: 0,
           visibility: GPUShaderStage.FRAGMENT,
-          texture: { sampleType: 'unfilterable-float' }, // rgba32float is unfilterable
+          texture: { sampleType },
         },
         {
           binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: { type: 'non-filtering' }, // Must match unfilterable texture
+          sampler: { type: samplerType },
         },
         {
           binding: 2,
@@ -385,6 +488,7 @@ export class WebGPURenderer {
       imageAspect,
       canvasAspect,
       this.transparent ? 1.0 : 0.0,
+      this.getTransferFunctionIndex(this.currentTransferFunction),
     ]);
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms.buffer);
 
@@ -449,8 +553,17 @@ export class WebGPURenderer {
         return 1;
       case 'rec2020':
         return 2;
-      default:
+    }
+  }
+
+  private getTransferFunctionIndex(transferFunction: TransferFunction): number {
+    switch (transferFunction) {
+      case "linear":
         return 0;
+      case "srgb":
+        return 1;
+      case "pq":
+        return 2;
     }
   }
 

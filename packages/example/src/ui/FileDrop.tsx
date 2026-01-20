@@ -7,23 +7,14 @@
 import { useCallback, useState } from 'react';
 
 interface FileDropProps {
-  onFileLoaded: (arrayBuffer: ArrayBuffer, filename: string) => void;
+  onFileLoaded: (file: File) => void;
 }
 
 export function FileDrop({ onFileLoaded }: FileDropProps) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleFile = useCallback(
-    (file: File) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const arrayBuffer = e.target?.result as ArrayBuffer;
-        if (arrayBuffer) {
-          onFileLoaded(arrayBuffer, file.name);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    },
+    (file: File) => onFileLoaded(file),
     [onFileLoaded]
   );
 
@@ -77,7 +68,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
     >
       <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Drop HDR file here</p>
       <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#888' }}>
-        Supported formats: Radiance HDR (.hdr), OpenEXR (.exr)
+        Supported formats: Radiance HDR (.hdr, .pic)
       </p>
       <label
         style={{
@@ -93,7 +84,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         Choose File
         <input
           type="file"
-          accept=".hdr,.exr,.pic"
+          accept=".hdr,.pic"
           onChange={handleInputChange}
           style={{ display: 'none' }}
         />

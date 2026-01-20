@@ -5,15 +5,14 @@
  * Coordinates specialized components for rendering, viewport control, and interactions.
  */
 
-import { ImageLoader } from './image';
 import { InteractionManager } from './interaction';
 import { CanvasResizer, RenderSettings } from './render';
 import { WebGPURenderer } from './render';
 import type {
   CanvasAPI,
   HDRCanvasOptions,
+  ImageData,
   InteractionAPI,
-  LinearImageData,
   RenderAPI,
   ViewportAPI,
 } from './types';
@@ -163,23 +162,15 @@ export class HDRCanvas {
   }
 
   /**
-   * Load image from LinearImageData
+   * Load image from ImageData (LinearImageData or EncodedImageData)
    */
-  async loadImage(data: LinearImageData): Promise<void> {
+  async loadImage(data: ImageData): Promise<void> {
     if (!this.initialized) {
       await this.initialize();
     }
 
     this.renderer.uploadImage(data);
     this.renderInternal();
-  }
-
-  /**
-   * Load file with auto-detection of format
-   */
-  async loadFile(file: File): Promise<void> {
-    const imageData = await ImageLoader.decodeFile(file);
-    return this.loadImage(imageData);
   }
 
   // ============================================================

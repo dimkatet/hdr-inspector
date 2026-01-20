@@ -4,12 +4,12 @@
  * Demonstrates usage of @dimkatet/hdr-image-renderer React component
  */
 
-import type { LinearImageData, RenderState } from '@dimkatet/hdr-image-renderer';
+import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
 import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react';
 import { useCallback, useRef, useState } from 'react';
 
 interface ImageCanvasProps {
-  image: LinearImageData | null;
+  image: ImageData | null;
   renderState: RenderState;
 }
 

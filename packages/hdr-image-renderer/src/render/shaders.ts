@@ -4,7 +4,7 @@
  * HDR rendering pipeline with exposure, tone mapping, and PQ encoding.
  */
 
-export const vertexShaderWGSL = `
+export const vertexShaderWGSL = /* wgsl */ `
 // Vertex shader for fullscreen quad
 
 struct VertexOutput {
@@ -37,7 +37,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 }
 `;
 
-export const fragmentShaderWGSL = `
+export const fragmentShaderWGSL = /* wgsl */ `
 // Fragment shader for HDR rendering
 
 // Bindings
@@ -56,6 +56,7 @@ struct Uniforms {
   imageAspect: f32,       // Image width / height
   canvasAspect: f32,      // Canvas width / height
   transparent: f32,       // 0=opaque background, 1=transparent
+  inputTransferFunction: f32, // 0=linear, 1=srgb, 2=pq
 };
 
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
@@ -136,19 +137,60 @@ fn applyToneMapping(rgb: vec3<f32>, op: i32) -> vec3<f32> {
 
 // === Transfer Functions ===
 
-// Linear to sRGB (for SDR output)
-fn linearToSRGB_scalar(linear: f32) -> f32 {
+// sRGB EOTF: encoded → linear (for decoding input)
+fn srgbEOTF_scalar(encoded: f32) -> f32 {
+  if (encoded <= 0.04045) {
+    return encoded / 12.92;
+  }
+  return pow((encoded + 0.055) / 1.055, 2.4);
+}
+
+fn srgbEOTF(encoded: vec3<f32>) -> vec3<f32> {
+  return vec3<f32>(
+    srgbEOTF_scalar(encoded.r),
+    srgbEOTF_scalar(encoded.g),
+    srgbEOTF_scalar(encoded.b)
+  );
+}
+
+// PQ (ST.2084) EOTF: encoded → linear (for decoding HDR input)
+// Output: scene-referred linear RGB where 1.0 = diffuse white (203 nits)
+fn pqEOTF(encoded: vec3<f32>) -> vec3<f32> {
+  // PQ constants (SMPTE ST 2084)
+  let m1 = 0.1593017578125;      // 2610 / 16384
+  let m2 = 78.84375;              // 2523 / 32 * 128
+  let c1 = 0.8359375;             // 3424 / 4096
+  let c2 = 18.8515625;            // 2413 / 128 * 32
+  let c3 = 18.6875;               // 2392 / 128 * 32
+
+  // Inverse PQ EOTF
+  let Nm2 = pow(max(encoded, vec3<f32>(0.0)), vec3<f32>(1.0 / m2));
+  let numerator = max(Nm2 - c1, vec3<f32>(0.0));
+  let denominator = c2 - c3 * Nm2;
+  let Y = pow(numerator / denominator, vec3<f32>(1.0 / m1));
+
+  // Y is now in [0, 1] range representing [0, 10000] nits
+  let absoluteNits = Y * 10000.0;
+
+  // Convert to scene-referred: 1.0 = 203 nits (diffuse white)
+  let diffuseWhiteNits = 203.0;
+  return absoluteNits / diffuseWhiteNits;
+}
+
+// Linear to sRGB EOTF⁻¹ (for encoding output)
+// Note: This function does NOT clamp - values > 1.0 are preserved!
+fn srgbOEFT_scalar(linear: f32) -> f32 {
   if (linear <= 0.0031308) {
     return 12.92 * linear;
   }
   return 1.055 * pow(linear, 1.0 / 2.4) - 0.055;
 }
 
-fn linearToSRGB(linear: vec3<f32>) -> vec3<f32> {
+fn srgbOEFT(linear: vec3<f32>) -> vec3<f32> {
   return vec3<f32>(
-    linearToSRGB_scalar(linear.r),
-    linearToSRGB_scalar(linear.g),
-    linearToSRGB_scalar(linear.b)
+    srgbOEFT_scalar(linear.r),
+    srgbOEFT_scalar(linear.g),
+    srgbOEFT_scalar(linear.b)
   );
 }
 
@@ -237,10 +279,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   // Apply viewport transform (zoom/pan) with aspect ratio correction
   let transformedUV = transformUV(in.uv, uniforms.zoom, uniforms.panX, uniforms.panY, uniforms.imageAspect, uniforms.canvasAspect);
 
-  // Sample HDR texture first (must be in uniform control flow)
+  // Sample texture first (must be in uniform control flow)
   // Clamp UV to valid range for sampling
   let clampedUV = clamp(transformedUV, vec2<f32>(0.0), vec2<f32>(1.0));
-  var rgb = textureSample(hdrTexture, hdrSampler, clampedUV).rgb;
+  let texel = textureSample(hdrTexture, hdrSampler, clampedUV).rgb;
+
+  // Decode input to linear RGB (scene-referred)
+  var rgb: vec3<f32>;
+  let inputTF = i32(uniforms.inputTransferFunction);
+  if (inputTF == 1) {
+    // sRGB encoded → linear
+    rgb = srgbEOTF(texel);
+  } else if (inputTF == 2) {
+    // PQ encoded → linear (scene-referred, 1.0 = 203 nits)
+    rgb = pqEOTF(texel);
+  } else {
+    // Already linear (inputTF == 0)
+    rgb = texel;
+  }
 
   // Check if UV is outside [0, 1] range
   let outOfBounds = transformedUV.x < 0.0 || transformedUV.x > 1.0 ||
@@ -282,18 +338,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       let lum = luminance(tonemapped);
       color = turboColormap(lum);
       // Apply sRGB gamma for false-color visualization
-      color = linearToSRGB(color);
+      color = srgbOEFT(color);
     } else if (vizMode == 2) {
       // Clipping visualization
       let clipped = any(rgb > vec3<f32>(10.0));
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        color = linearToSRGB(color);
+        color = srgbOEFT(color);
       }
     } else {
       // RGB mode: Apply color space transform + encoding
-      color = linearToSRGB(rgb);
+      color = srgbOEFT(rgb);
     }
   } else {
     // SDR mode: Apply tone mapping, color space transform, and gamma encoding
@@ -319,7 +375,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Apply gamma encoding (sRGB gamma curve)
     // Note: P3 and BT.2020 use same gamma as sRGB
-    color = linearToSRGB(color);
+    color = srgbOEFT(color);
   }
 
   return vec4<f32>(color, 1.0);

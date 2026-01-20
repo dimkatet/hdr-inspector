@@ -4,8 +4,8 @@
 import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
 import type {
   HDRCanvasOptions,
+  ImageData,
   KeyboardConfig,
-  LinearImageData,
   ViewportConfig,
   ViewportState,
   WheelConfig,
@@ -95,8 +95,8 @@ export interface HDRImageProps
     React.CanvasHTMLAttributes<HTMLCanvasElement>,
     'onLoad' | 'onError' | 'onViewportChange'
   > {
-  /** Image data or file to display */
-  image?: LinearImageData | File;
+  /** Image data to display (LinearImageData or EncodedImageData) */
+  image?: ImageData;
   /** Render options (exposure, toneMapping, etc.) */
   options: HDRCanvasOptions;
   /** Callback when image loads successfully with image info */
