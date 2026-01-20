@@ -19,7 +19,7 @@ export function useZoomCallback(
   useEffect(() => {
     if (!instanceRef.current || !onZoomRef.current) return;
 
-    const unsubscribe = instanceRef.current.onZoom((zoom, state) => {
+    const unsubscribe = instanceRef.current.viewport.onZoom((zoom, state) => {
       onZoomRef.current?.(zoom, state);
     });
 

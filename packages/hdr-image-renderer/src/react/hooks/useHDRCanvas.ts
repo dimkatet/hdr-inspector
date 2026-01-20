@@ -27,7 +27,7 @@ export function useHDRCanvas(
 
     try {
       instanceRef.current = new HDRCanvas(canvasRef.current, initialOptions);
-      cleanup = instanceRef.current.enableAutoResize();
+      cleanup = instanceRef.current.control.enableAutoResize();
     } catch (error) {
       onError?.(error as Error);
     }

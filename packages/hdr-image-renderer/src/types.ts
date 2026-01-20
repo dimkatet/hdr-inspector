@@ -246,3 +246,110 @@ export interface InteractionOptions extends ViewportConfig {
   /** Keyboard control configuration (true for defaults, object for custom config) */
   keyboard?: boolean | KeyboardConfig;
 }
+
+// ============================================================
+// Namespaced API Interfaces
+// ============================================================
+
+/**
+ * Viewport control API
+ * Manages zoom, pan, and viewport state
+ */
+export interface ViewportAPI {
+  // State
+  /** Get current viewport state (zoom, panX, panY) */
+  getState(): ViewportState;
+  /** Update viewport configuration (minZoom, maxZoom, animation settings) */
+  setConfig(config: Partial<ViewportConfig>): void;
+
+  // Commands (instant)
+  /** Set zoom level (instant, no animation) */
+  setZoom(zoom: number): void;
+  /** Set pan offset (instant, no animation) */
+  setPan(x: number, y: number): void;
+  /** Set complete viewport state (instant, no animation) */
+  setViewport(viewport: Partial<ViewportState>): void;
+
+  // Commands (animated)
+  /** Zoom in by factor (default: 2x, animated) */
+  zoomIn(factor?: number): void;
+  /** Zoom out by factor (default: 2x, animated) */
+  zoomOut(factor?: number): void;
+  /** Zoom to fit entire image in canvas (animated) */
+  zoomToFit(): void;
+  /** Zoom to actual size, 1:1 pixel mapping (animated) */
+  zoomToActual(): void;
+  /** Reset viewport to default state (zoom 1, no pan) */
+  reset(animated?: boolean): void;
+
+  // Events
+  /** Subscribe to zoom changes (throttled for wheel/pinch, immediate for buttons) */
+  onZoom(callback: (zoom: number, state: ViewportState) => void, throttleMs?: number): () => void;
+  /** Subscribe to pan changes (throttled for drag) */
+  onPan(callback: (panX: number, panY: number, state: ViewportState) => void, throttleMs?: number): () => void;
+  /** Subscribe to viewport updates (fires every animation frame) */
+  onUpdate(callback: (state: ViewportState) => void): () => void;
+  /** Subscribe to all viewport mutations (low-level, fires before animation) */
+  onMutation(listener: MutationListener): () => void;
+  /** Subscribe to animation completion events */
+  onTransitionEnd(listener: TransitionEndListener): () => void;
+  /** Subscribe to reset events */
+  onReset(callback: (state: ViewportState) => void): () => void;
+
+  // Filtered events (convenience)
+  /** Subscribe to wheel zoom events only */
+  onWheelZoom(callback: (zoom: number, state: ViewportState) => void): () => void;
+  /** Subscribe to button/programmatic zoom events only */
+  onButtonZoom(callback: (zoom: number, state: ViewportState) => void): () => void;
+  /** Subscribe to drag pan events only */
+  onDragPan(callback: (panX: number, panY: number, state: ViewportState) => void): () => void;
+}
+
+/**
+ * Render settings API
+ * Controls exposure, tone mapping, and visualization
+ */
+export interface RenderAPI {
+  /** Get current render state (exposure, toneMapping, hdrMode, etc.) */
+  getState(): RenderState;
+  /** Set exposure value in stops (EV) */
+  setExposure(ev: number): void;
+  /** Set tone mapping operator (none, reinhard, aces) */
+  setToneMapping(operator: ToneMappingOperator): void;
+  /** Enable/disable HDR mode (requires HDR-capable display) */
+  setHDRMode(enabled: boolean): void;
+  /** Set output color space (srgb, display-p3, rec2020) */
+  setColorSpace(space: ColorSpace): void;
+  /** Set visualization mode (rgb, luminance, clipping) */
+  setVisualizationMode(mode: VisualizationMode): void;
+  /** Batch update multiple render options */
+  updateOptions(options: Partial<HDRCanvasOptions>): void;
+}
+
+/**
+ * Interaction management API
+ * Handles mouse, touch, and keyboard interactions
+ */
+export interface InteractionAPI {
+  /** Attach interaction handlers (wheel, drag, touch, keyboard) and return cleanup function */
+  attach(options?: InteractionOptions): () => void;
+  /** Detach all interaction handlers */
+  detach(): void;
+}
+
+/**
+ * Canvas control API
+ * Canvas-specific operations (auto-resize, image info, etc.)
+ */
+export interface CanvasAPI {
+  /** Enable automatic canvas resize based on CSS layout (returns cleanup function) */
+  enableAutoResize(): () => void;
+  /** Disable automatic canvas resize */
+  disableAutoResize(): void;
+  /** Get loaded image dimensions */
+  getImageDimensions(): { width: number; height: number };
+  /** Get loaded image info (dimensions + aspect ratio) */
+  getImageInfo(): ImageInfo;
+  /** Force re-render (e.g., after manual canvas resize) */
+  forceRender(): void;
+}

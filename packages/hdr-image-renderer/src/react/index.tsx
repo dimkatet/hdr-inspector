@@ -141,13 +141,13 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   useImperativeHandle(
     ref,
     () => ({
-      zoomIn: (factor?: number) => instanceRef.current?.zoomIn(factor),
-      zoomOut: (factor?: number) => instanceRef.current?.zoomOut(factor),
-      zoomToFit: () => instanceRef.current?.zoomToFit(),
-      zoomToActual: () => instanceRef.current?.zoomToActual(),
-      resetViewport: () => instanceRef.current?.resetViewport(),
-      getViewport: () => instanceRef.current?.getViewport() ?? { zoom: 1, panX: 0, panY: 0 },
-      setViewport: (viewport) => instanceRef.current?.setViewport(viewport),
+      zoomIn: (factor?: number) => instanceRef.current?.viewport.zoomIn(factor),
+      zoomOut: (factor?: number) => instanceRef.current?.viewport.zoomOut(factor),
+      zoomToFit: () => instanceRef.current?.viewport.zoomToFit(),
+      zoomToActual: () => instanceRef.current?.viewport.zoomToActual(),
+      resetViewport: () => instanceRef.current?.viewport.reset(),
+      getViewport: () => instanceRef.current?.viewport.getState() ?? { zoom: 1, panX: 0, panY: 0 },
+      setViewport: (viewport) => instanceRef.current?.viewport.setViewport(viewport),
       getCanvas: () => instanceRef.current,
     }),
     [instanceRef]

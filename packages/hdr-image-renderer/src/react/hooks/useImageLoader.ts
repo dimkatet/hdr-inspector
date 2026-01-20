@@ -42,12 +42,8 @@ export function useImageLoader(
 
     loadPromise
       .then(() => {
-        const dimensions = instance.getImageDimensions();
-        onLoad?.({
-          width: dimensions.width,
-          height: dimensions.height,
-          aspectRatio: dimensions.width / dimensions.height,
-        });
+        const info = instance.control.getImageInfo();
+        onLoad?.(info);
       })
       .catch(onError);
   }, [image, instanceRef]);

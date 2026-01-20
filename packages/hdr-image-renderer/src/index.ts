@@ -26,4 +26,9 @@ export type {
   TouchConfig,
   WheelConfig,
   KeyboardConfig,
+  // Namespaced API interfaces
+  ViewportAPI,
+  RenderAPI,
+  InteractionAPI,
+  CanvasAPI,
 } from './types';

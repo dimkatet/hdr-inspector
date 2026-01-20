@@ -13,7 +13,7 @@ export function useRenderOptions(
   const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace } = options;
 
   useEffect(() => {
-    instanceRef.current?.updateOptions({
+    instanceRef.current?.render.updateOptions({
       exposure,
       toneMapping,
       hdrMode,

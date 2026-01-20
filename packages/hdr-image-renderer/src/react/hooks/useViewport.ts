@@ -53,12 +53,12 @@ export function useViewport(
       return;
     }
 
-    const detachInteractions = instanceRef.current.attachInteractions({
+    const detachInteractions = instanceRef.current.interaction.attach({
       ...viewportConfig,
       keyboard,
     });
 
-    const unsubscribeViewport = instanceRef.current.onViewportChange((v) => {
+    const unsubscribeViewport = instanceRef.current.viewport.onUpdate((v) => {
       setViewport(v);
       onViewportChangeRef.current?.(v);
     });
@@ -79,7 +79,7 @@ export function useViewport(
 
   // Reset function
   const resetViewport = useCallback(() => {
-    instanceRef.current?.resetViewport();
+    instanceRef.current?.viewport.reset();
     setViewport({ zoom: 1, panX: 0, panY: 0 });
   }, [instanceRef]);
 
