@@ -1,11 +1,13 @@
 // Core exports for vanilla JS API
 
 export { HDRCanvas } from './HDRCanvas';
+export { ImageLoadingManager } from './ImageLoadingManager';
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   type HDRCapabilities,
 } from './utils';
+export { destroySharedDevice } from './render/gpu-device';
 export { ViewportController } from './viewport';
 export { MouseHandler, TouchHandler, KeyboardHandler } from './interaction';
 export type {
@@ -33,4 +35,11 @@ export type {
   RenderAPI,
   InteractionAPI,
   CanvasAPI,
+  LoadingAPI,
+  // Loading types
+  ImageLoader,
+  LoadOptions,
+  LoadingState,
+  LoadingStateListener,
+  DisplayedImageType,
 } from './types';

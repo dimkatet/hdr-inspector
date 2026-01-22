@@ -5,6 +5,7 @@
  * Coordinates specialized components for rendering, viewport control, and interactions.
  */
 
+import { ImageLoadingManager } from './ImageLoadingManager';
 import { InteractionManager } from './interaction';
 import { CanvasResizer, RenderSettings } from './render';
 import { WebGPURenderer } from './render';
@@ -13,6 +14,7 @@ import type {
   HDRCanvasOptions,
   ImageData,
   InteractionAPI,
+  LoadingAPI,
   RenderAPI,
   ViewportAPI,
 } from './types';
@@ -30,6 +32,7 @@ export class HDRCanvas {
   private interactions: InteractionManager;
   private resizer: CanvasResizer;
   private subscriptions: ViewportSubscriptions;
+  private loadingManager: ImageLoadingManager;
 
   // ============================================================
   // Namespaced API
@@ -116,6 +119,17 @@ export class HDRCanvas {
     },
   };
 
+  /**
+   * Image loading API
+   * Manages async image loading with placeholder and error fallback support
+   */
+  readonly loading: LoadingAPI = {
+    load: (loader, options) => this.loadingManager.load(loader, options),
+    cancel: () => this.loadingManager.cancel(),
+    getState: () => this.loadingManager.getState(),
+    onStateChange: (callback) => this.loadingManager.onStateChange(callback),
+  };
+
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
     this.canvas = canvas;
 
@@ -145,6 +159,10 @@ export class HDRCanvas {
 
     this.resizer = new CanvasResizer(this.canvas, () => this.control.forceRender());
     this.subscriptions = new ViewportSubscriptions(this.viewportController);
+    this.loadingManager = new ImageLoadingManager(
+      (data) => this.loadImage(data),
+      () => this.control.getImageInfo()
+    );
   }
 
   // ============================================================
@@ -193,6 +211,7 @@ export class HDRCanvas {
    * Cleanup GPU resources
    */
   destroy(): void {
+    this.loadingManager.destroy();
     this.resizer.disable();
     this.interactions.detach();
     this.viewportController.destroy();

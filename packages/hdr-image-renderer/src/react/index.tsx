@@ -5,7 +5,9 @@ import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
 import type {
   HDRCanvasOptions,
   ImageData,
+  ImageLoader,
   KeyboardConfig,
+  LoadingState,
   ViewportConfig,
   ViewportState,
   WheelConfig,
@@ -95,8 +97,18 @@ export interface HDRImageProps
     React.CanvasHTMLAttributes<HTMLCanvasElement>,
     'onLoad' | 'onError' | 'onViewportChange'
   > {
-  /** Image data to display (LinearImageData or EncodedImageData) */
+  /** Image data to display (LinearImageData or EncodedImageData). Mutually exclusive with `loader`. */
   image?: ImageData;
+  /** Async image loader function. Mutually exclusive with `image`. */
+  loader?: ImageLoader;
+  /** Placeholder image to show while loader is running */
+  placeholder?: ImageData;
+  /** Error fallback image to show if loader fails */
+  errorFallback?: ImageData;
+  /** Timeout in milliseconds for loader (rejects if exceeded) */
+  loadingTimeout?: number;
+  /** Callback when loading state changes (only when using loader) */
+  onLoadingStateChange?: (state: LoadingState) => void;
   /** Render options (exposure, toneMapping, etc.) */
   options: HDRCanvasOptions;
   /** Callback when image loads successfully with image info */
@@ -116,6 +128,11 @@ export interface HDRImageProps
 export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRImage(
   {
     image,
+    loader,
+    placeholder,
+    errorFallback,
+    loadingTimeout,
+    onLoadingStateChange,
     options,
     onLoad,
     onError,
@@ -164,8 +181,17 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     [fitToImage, onLoad]
   );
 
-  // Load image when it changes
-  useImageLoader(instanceRef, image, { onLoad: handleLoad, onError });
+  // Load image (supports both direct ImageData and async loader)
+  useImageLoader(instanceRef, {
+    image,
+    loader,
+    placeholder,
+    errorFallback,
+    timeout: loadingTimeout,
+    onLoad: handleLoad,
+    onError,
+    onLoadingStateChange,
+  });
 
   // Sync render options
   useRenderOptions(instanceRef, options);
@@ -193,4 +219,9 @@ export type {
   ImageInfo,
   UseViewportOptions,
   UseViewportResult,
+  UseImageLoaderOptions,
+  UseImageLoaderResult,
 } from './hooks';
+
+// Re-export loading types for convenience
+export type { ImageLoader, LoadingState, LoadOptions } from '../types';
