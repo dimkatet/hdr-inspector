@@ -14,6 +14,7 @@ import type {
   ViewportState,
 } from '../types';
 import { fragmentShaderWGSL, vertexShaderWGSL } from './shaders';
+import { getSharedDevice } from './gpu-device';
 
 export interface WebGPURenderOptions {
   exposure: number;
@@ -60,18 +61,8 @@ export class WebGPURenderer {
       throw new Error('WebGPU not supported in this browser');
     }
 
-    // Request adapter and device
-    const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) {
-      throw new Error('Failed to get WebGPU adapter');
-    }
-
-    // Request device with optional features for better texture format support
-    const requiredFeatures: GPUFeatureName[] = ['texture-formats-tier1'];
-
-    this.device = await adapter.requestDevice({
-      requiredFeatures,
-    });
+    // Get shared device (singleton)
+    this.device = await getSharedDevice();
 
     // Get canvas context
     const context = this.canvas.getContext('webgpu');
@@ -226,10 +217,6 @@ export class WebGPURenderer {
    */
   private async checkHDRSupport(): Promise<boolean> {
     try {
-      // Check if rgba16float is supported
-      const adapter = await navigator.gpu.requestAdapter();
-      if (!adapter) return false;
-
       // Try to create a test texture with rgba16float
       const testTexture = this.device.createTexture({
         size: { width: 1, height: 1 },
@@ -576,12 +563,13 @@ export class WebGPURenderer {
 
   /**
    * Cleanup resources
+   * Note: Does NOT destroy the shared GPUDevice - only local resources
    */
   destroy(): void {
     console.log('[WebGPURenderer] Destroying renderer');
 
     if (this.texture) this.texture.destroy();
     if (this.uniformBuffer) this.uniformBuffer.destroy();
-    if (this.device) this.device.destroy();
+    // Don't destroy shared device - it's managed by gpu-device.ts singleton
   }
 }
