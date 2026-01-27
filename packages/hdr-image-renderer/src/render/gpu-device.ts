@@ -5,9 +5,21 @@
  * This prevents "too many devices" errors when creating multiple canvases.
  */
 
+import type { Logger } from '../logger';
+import { silentLogger } from '../logger';
+
 let sharedDevice: GPUDevice | null = null;
 let sharedAdapter: GPUAdapter | null = null;
 let initPromise: Promise<GPUDevice> | null = null;
+let deviceLogger: Logger = silentLogger;
+
+/**
+ * Set the logger for GPU device initialization messages.
+ * Must be called before getSharedDevice() for logging to take effect.
+ */
+export function setGPUDeviceLogger(logger: Logger): void {
+  deviceLogger = logger;
+}
 
 /**
  * Get the shared GPUDevice instance.
@@ -43,7 +55,7 @@ export async function getSharedAdapter(): Promise<GPUAdapter> {
  * Initialize the shared device
  */
 async function initializeDevice(): Promise<GPUDevice> {
-  console.log('[GPUDevice] Initializing shared device...');
+  deviceLogger.log('[GPUDevice] Initializing shared device...');
 
   if (!navigator.gpu) {
     throw new Error('WebGPU not supported in this browser');
@@ -71,7 +83,7 @@ async function initializeDevice(): Promise<GPUDevice> {
   });
 
   sharedDevice = device;
-  console.log('[GPUDevice] Shared device initialized');
+  deviceLogger.log('[GPUDevice] Shared device initialized');
 
   return device;
 }
@@ -81,7 +93,7 @@ async function initializeDevice(): Promise<GPUDevice> {
  */
 export function destroySharedDevice(): void {
   if (sharedDevice) {
-    console.log('[GPUDevice] Destroying shared device');
+    deviceLogger.log('[GPUDevice] Destroying shared device');
     sharedDevice.destroy();
     sharedDevice = null;
     sharedAdapter = null;

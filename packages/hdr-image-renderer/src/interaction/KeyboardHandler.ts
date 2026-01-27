@@ -106,13 +106,6 @@ export class KeyboardHandler {
    * @returns Cleanup function
    */
   attach(): () => void {
-    console.log(
-      '[KeyboardHandler] attach() called, config.enabled:',
-      this.config.enabled,
-      'attached:',
-      this.attached
-    );
-
     if (this.attached || !this.config.enabled) {
       return () => this.detach();
     }
@@ -120,36 +113,18 @@ export class KeyboardHandler {
     // Make element focusable if not already
     if (!this.element.hasAttribute('tabindex')) {
       this.element.setAttribute('tabindex', '0');
-      console.log('[KeyboardHandler] Added tabindex="0" to canvas');
-    } else {
-      console.log(
-        '[KeyboardHandler] Canvas already has tabindex:',
-        this.element.getAttribute('tabindex')
-      );
     }
 
     // Focus canvas on click (canvas doesn't auto-focus like input elements)
-    const onClick = () => {
-      console.log('[KeyboardHandler] Canvas clicked, focusing...');
-      this.element.focus();
-    };
-
-    // Debug focus events
-    const onFocus = () => console.log('[KeyboardHandler] Canvas focused');
-    const onBlur = () => console.log('[KeyboardHandler] Canvas blurred');
+    const onClick = () => this.element.focus();
 
     this.element.addEventListener('click', onClick);
-    this.element.addEventListener('focus', onFocus);
-    this.element.addEventListener('blur', onBlur);
     this.element.addEventListener('keydown', this.boundHandleKeyDown);
 
     this.attached = true;
-    console.log('[KeyboardHandler] Event listener attached, element:', this.element.tagName);
 
     return () => {
       this.element.removeEventListener('click', onClick);
-      this.element.removeEventListener('focus', onFocus);
-      this.element.removeEventListener('blur', onBlur);
       this.detach();
     };
   }

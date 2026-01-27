@@ -7,8 +7,10 @@
 
 import { ImageLoadingManager } from './ImageLoadingManager';
 import { InteractionManager } from './interaction';
+import { createLogger } from './logger';
 import { CanvasResizer, RenderSettings } from './render';
 import { WebGPURenderer } from './render';
+import { setGPUDeviceLogger } from './render/gpu-device';
 import type {
   CanvasAPI,
   HDRCanvasOptions,
@@ -134,7 +136,9 @@ export class HDRCanvas {
     this.canvas = canvas;
 
     // Initialize core components
-    this.renderer = new WebGPURenderer(canvas, { transparent: options.transparent });
+    const logger = createLogger(options.debug ?? false);
+    setGPUDeviceLogger(logger);
+    this.renderer = new WebGPURenderer(canvas, { transparent: options.transparent, logger });
     this.viewportController = new ViewportController();
     this.viewportController.onUpdate(() => this.renderInternal());
 
@@ -187,7 +191,7 @@ export class HDRCanvas {
       await this.initialize();
     }
 
-    this.renderer.uploadImage(data);
+    await this.renderer.uploadImage(data);
     this.renderInternal();
   }
 

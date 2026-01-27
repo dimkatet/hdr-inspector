@@ -8,18 +8,19 @@
 import type {
   ColorSpace,
   ImageData,
-  LinearImageData,
-  EncodedImageData,
   TransferFunction,
   ViewportState,
-} from '../types';
-import { fragmentShaderWGSL, vertexShaderWGSL } from './shaders';
-import { getSharedDevice } from './gpu-device';
+} from "../types";
+import type { Logger } from "../logger";
+import { silentLogger } from "../logger";
+import { fragmentShaderWGSL, vertexShaderWGSL } from "./shaders";
+import { getSharedDevice } from "./gpu-device";
+import { ImagePreprocessor } from "./ImagePreprocessor";
 
 export interface WebGPURenderOptions {
   exposure: number;
-  toneMapping: 'none' | 'reinhard' | 'aces';
-  visualizationMode: 'rgb' | 'luminance' | 'clipping';
+  toneMapping: "none" | "reinhard" | "aces";
+  visualizationMode: "rgb" | "luminance" | "clipping";
   hdrMode: boolean; // true = PQ output, false = sRGB output
   colorSpace: ColorSpace; // Color space for output
   viewport: ViewportState; // Zoom and pan state
@@ -27,6 +28,7 @@ export interface WebGPURenderOptions {
 
 export interface WebGPURendererOptions {
   transparent?: boolean;
+  logger?: Logger;
 }
 
 export class WebGPURenderer {
@@ -40,16 +42,20 @@ export class WebGPURenderer {
   private uniformBuffer!: GPUBuffer;
   private supportsHDR = false;
   private currentHDRMode = false;
-  private currentColorSpace: ColorSpace = 'srgb';
+  private currentColorSpace: ColorSpace = "srgb";
   private imageWidth = 1;
   private imageHeight = 1;
   private transparent = false;
-  private currentTextureFormat: GPUTextureFormat = 'rgba32float';
-  private currentTransferFunction: TransferFunction = 'linear';
+  private currentTextureFormat: GPUTextureFormat = "rgba32float";
+  private currentTransferFunction: TransferFunction = "linear";
+  private logger: Logger;
+  private preprocessor: ImagePreprocessor;
 
   constructor(canvas: HTMLCanvasElement, options: WebGPURendererOptions = {}) {
     this.canvas = canvas;
     this.transparent = options.transparent ?? false;
+    this.logger = options.logger ?? silentLogger;
+    this.preprocessor = new ImagePreprocessor(this.logger);
   }
 
   /**
@@ -58,26 +64,26 @@ export class WebGPURenderer {
   async initialize(): Promise<void> {
     // Check WebGPU support
     if (!navigator.gpu) {
-      throw new Error('WebGPU not supported in this browser');
+      throw new Error("WebGPU not supported in this browser");
     }
 
     // Get shared device (singleton)
     this.device = await getSharedDevice();
 
     // Get canvas context
-    const context = this.canvas.getContext('webgpu');
+    const context = this.canvas.getContext("webgpu");
     if (!context) {
-      throw new Error('Failed to get WebGPU context');
+      throw new Error("Failed to get WebGPU context");
     }
     this.context = context;
 
     // Check HDR support
     const preferredFormat = navigator.gpu.getPreferredCanvasFormat();
-    console.log('[WebGPURenderer] Preferred format:', preferredFormat);
+    this.logger.log("[WebGPURenderer] Preferred format:", preferredFormat);
 
     // Configure context for HDR (will try rgba16float, fallback to bgra8unorm)
     this.supportsHDR = await this.checkHDRSupport();
-    console.log('[WebGPURenderer] HDR support:', this.supportsHDR);
+    this.logger.log("[WebGPURenderer] HDR support:", this.supportsHDR);
 
     // Configure canvas context for HDR output
     // CRITICAL: For HDR output, we need:
@@ -85,16 +91,22 @@ export class WebGPURenderer {
     // 2. toneMapping: { mode: 'extended' } (tells browser NOT to apply its own tone mapping)
     // 3. colorSpace matching display capabilities
 
-    const preferredColorSpace = 'srgb'; // sRGB for initial config
-    console.log('[WebGPURenderer] Trying color space:', preferredColorSpace);
-    console.log('[WebGPURenderer] HDR format:', this.supportsHDR ? 'rgba16float' : preferredFormat);
+    const preferredColorSpace = "srgb"; // sRGB for initial config
+    this.logger.log(
+      "[WebGPURenderer] Trying color space:",
+      preferredColorSpace,
+    );
+    this.logger.log(
+      "[WebGPURenderer] HDR format:",
+      this.supportsHDR ? "rgba16float" : preferredFormat,
+    );
 
     // Try to configure with preferred settings
     try {
       const config: GPUCanvasConfiguration = {
         device: this.device,
-        format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-        alphaMode: this.transparent ? 'premultiplied' : 'opaque',
+        format: this.supportsHDR ? "rgba16float" : preferredFormat,
+        alphaMode: this.transparent ? "premultiplied" : "opaque",
         colorSpace: preferredColorSpace as PredefinedColorSpace,
       };
 
@@ -102,35 +114,42 @@ export class WebGPURenderer {
       // "Don't apply any tone mapping, I'm giving you values in extended range [0, max_nits]"
       // This is REQUIRED for HDR output to work correctly
       if (this.supportsHDR) {
-        config.toneMapping = { mode: 'extended' };
+        config.toneMapping = { mode: "extended" };
       }
 
       this.context.configure(config);
-      console.log('[WebGPURenderer] Successfully configured:', {
+      this.logger.log("[WebGPURenderer] Successfully configured:", {
         format: config.format,
         colorSpace: config.colorSpace,
         toneMapping: config.toneMapping,
       });
     } catch (error) {
       // If preferred color space fails (e.g., rec2020 on Safari), fallback
-      console.warn('[WebGPURenderer] Failed to configure with', preferredColorSpace, error);
+      this.logger.warn(
+        "[WebGPURenderer] Failed to configure with",
+        preferredColorSpace,
+        error,
+      );
 
-      const fallback = 'srgb';
-      console.log('[WebGPURenderer] Trying fallback color space:', fallback);
+      const fallback = "srgb";
+      this.logger.log(
+        "[WebGPURenderer] Trying fallback color space:",
+        fallback,
+      );
 
       const config: GPUCanvasConfiguration = {
         device: this.device,
-        format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-        alphaMode: this.transparent ? 'premultiplied' : 'opaque',
+        format: this.supportsHDR ? "rgba16float" : preferredFormat,
+        alphaMode: this.transparent ? "premultiplied" : "opaque",
         colorSpace: fallback as PredefinedColorSpace,
       };
 
       if (this.supportsHDR) {
-        config.toneMapping = { mode: 'extended' };
+        config.toneMapping = { mode: "extended" };
       }
 
       this.context.configure(config);
-      console.log('[WebGPURenderer] Configured with fallback:', {
+      this.logger.log("[WebGPURenderer] Configured with fallback:", {
         format: config.format,
         colorSpace: config.colorSpace,
         toneMapping: config.toneMapping,
@@ -140,10 +159,10 @@ export class WebGPURenderer {
     // Create sampler (will be updated when texture format changes)
     // Start with non-filtering for rgba32float compatibility
     this.sampler = this.device.createSampler({
-      magFilter: 'nearest',
-      minFilter: 'nearest',
-      addressModeU: 'clamp-to-edge',
-      addressModeV: 'clamp-to-edge',
+      magFilter: "nearest",
+      minFilter: "nearest",
+      addressModeU: "clamp-to-edge",
+      addressModeV: "clamp-to-edge",
     });
 
     // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace, zoom, panX, panY, imageAspect, canvasAspect, transparent, inputTransferFunction)
@@ -152,7 +171,10 @@ export class WebGPURenderer {
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    console.log('[WebGPURenderer] Initialized successfully');
+    // Initialize image preprocessor (compute pipeline for RGB→RGBA, bit depth remapping)
+    await this.preprocessor.initialize();
+
+    this.logger.log("[WebGPURenderer] Initialized successfully");
   }
 
   /**
@@ -174,17 +196,19 @@ export class WebGPURenderer {
    * - Shader applies tone mapping + color space transform + sRGB transfer function
    * - Values clamped to [0, 1] for bgra8unorm buffer
    */
-  private getCanvasColorSpace(renderState: WebGPURenderOptions): 'srgb' | 'display-p3' | 'rec2020' {
+  private getCanvasColorSpace(
+    renderState: WebGPURenderOptions,
+  ): "srgb" | "display-p3" | "rec2020" {
     const { colorSpace } = renderState;
 
     // Use standard (non-linear) color spaces for both HDR and SDR
-    if (colorSpace === 'display-p3') {
-      return 'display-p3';
+    if (colorSpace === "display-p3") {
+      return "display-p3";
     }
-    if (colorSpace === 'rec2020') {
-      return 'rec2020';
+    if (colorSpace === "rec2020") {
+      return "rec2020";
     }
-    return 'srgb';
+    return "srgb";
   }
 
   /**
@@ -194,19 +218,22 @@ export class WebGPURenderer {
     const canvasColorSpace = this.getCanvasColorSpace(renderState);
     const preferredFormat = navigator.gpu.getPreferredCanvasFormat();
 
-    console.log('[WebGPURenderer] Reconfiguring canvas for', renderState.hdrMode ? 'HDR' : 'SDR');
-    console.log('  - User color space:', renderState.colorSpace);
-    console.log('  - Canvas color space:', canvasColorSpace);
+    this.logger.log(
+      "[WebGPURenderer] Reconfiguring canvas for",
+      renderState.hdrMode ? "HDR" : "SDR",
+    );
+    this.logger.log("  - User color space:", renderState.colorSpace);
+    this.logger.log("  - Canvas color space:", canvasColorSpace);
 
     const config: GPUCanvasConfiguration = {
       device: this.device,
-      format: this.supportsHDR ? 'rgba16float' : preferredFormat,
-      alphaMode: this.transparent ? 'premultiplied' : 'opaque',
+      format: this.supportsHDR ? "rgba16float" : preferredFormat,
+      alphaMode: this.transparent ? "premultiplied" : "opaque",
       colorSpace: canvasColorSpace as PredefinedColorSpace,
     };
 
     if (this.supportsHDR) {
-      config.toneMapping = { mode: 'extended' };
+      config.toneMapping = { mode: "extended" };
     }
 
     this.context.configure(config);
@@ -220,167 +247,125 @@ export class WebGPURenderer {
       // Try to create a test texture with rgba16float
       const testTexture = this.device.createTexture({
         size: { width: 1, height: 1 },
-        format: 'rgba16float',
+        format: "rgba16float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
 
       testTexture.destroy();
 
       // Check display HDR support via media query
-      const displayHDR = window.matchMedia('(dynamic-range: high)').matches;
+      const displayHDR = window.matchMedia("(dynamic-range: high)").matches;
 
       return displayHDR;
     } catch (e) {
-      console.warn('[WebGPURenderer] HDR check failed:', e);
+      this.logger.warn("[WebGPURenderer] HDR check failed:", e);
       return false;
     }
   }
 
   /**
-   * Upload image to GPU texture
-   * Supports both LinearImageData (Float32Array) and EncodedImageData (Uint8Array/Uint16Array)
+   * Upload image to GPU texture.
+   * Delegates preprocessing (RGB→RGBA, bit depth remapping) to ImagePreprocessor.
    */
-  uploadImage(image: ImageData): void {
-    console.log('[WebGPURenderer] Uploading image:', image.width, 'x', image.height);
-    console.log('[WebGPURenderer] Transfer function:', image.transferFunction);
-
-    // Store image dimensions and transfer function
+  async uploadImage(image: ImageData): Promise<void> {
     this.imageWidth = image.width;
     this.imageHeight = image.height;
     this.currentTransferFunction = image.transferFunction;
 
-    console.log('[WebGPURenderer] Canvas size:', this.canvas.width, 'x', this.canvas.height);
-
-    // Destroy old texture if exists
     if (this.texture) {
       this.texture.destroy();
     }
 
-    // Determine texture format and prepare data based on input type
-    let textureFormat: GPUTextureFormat;
-    let rgbaData: Float32Array | Uint8Array | Uint16Array;
-    let bytesPerChannel: number;
-
-    if (image.data instanceof Float32Array) {
-      // Linear float data
-      textureFormat = 'rgba32float';
-      bytesPerChannel = 4;
-      rgbaData = this.convertToRGBA(image as LinearImageData);
-    } else if (image.data instanceof Uint16Array) {
-      textureFormat = 'rgba16unorm';
-      bytesPerChannel = 2;
-      rgbaData = this.convertToRGBA(image as EncodedImageData);
-    } else {
-      // 8-bit encoded data (Uint8Array)
-      textureFormat = 'rgba8unorm';
-      bytesPerChannel = 1;
-      rgbaData = this.convertToRGBA(image as EncodedImageData);
-    }
-
-    this.currentTextureFormat = textureFormat;
-    console.log('[WebGPURenderer] Texture format:', textureFormat);
+    const analysis = this.preprocessor.analyze(image);
+    this.currentTextureFormat = analysis.textureFormat;
 
     // Create texture
     this.texture = this.device.createTexture({
       size: { width: image.width, height: image.height },
-      format: textureFormat,
+      format: analysis.textureFormat,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     });
 
-    // Write texture data
-    this.device.queue.writeTexture(
-      { texture: this.texture },
-      rgbaData.buffer,
-      {
-        offset: 0,
-        bytesPerRow: image.width * 4 * bytesPerChannel,
-        rowsPerImage: image.height,
-      },
-      { width: image.width, height: image.height }
-    );
+    if (!analysis.needsPreprocessing) {
+      // Fast path: already RGBA with correct bit depth — direct upload
+      this.device.queue.writeTexture(
+        { texture: this.texture },
+        image.data.buffer,
+        {
+          offset: 0,
+          bytesPerRow: image.width * 4 * analysis.bytesPerChannel,
+          rowsPerImage: image.height,
+        },
+        { width: image.width, height: image.height },
+      );
+    } else {
+      // GPU preprocessing: RGB→RGBA + bit depth remapping via compute shader
+      const result = await this.preprocessor.preprocess(image, analysis);
+      // Copy preprocessed buffer directly to texture (GPU-only, no CPU readback)
+      const encoder = this.device.createCommandEncoder();
+      encoder.copyBufferToTexture(
+        {
+          buffer: result.buffer,
+          bytesPerRow: result.bytesPerRow,
+          rowsPerImage: result.height,
+        },
+        { texture: this.texture },
+        { width: result.width, height: result.height },
+      );
+      this.device.queue.submit([encoder.finish()]);
 
-    // Create pipeline and bind group
+      result.destroy();
+    }
+
     this.createPipeline();
-
-    console.log('[WebGPURenderer] Image uploaded successfully');
-  }
-
-  /**
-   * Convert RGB(A) data to RGBA format
-   */
-  private convertToRGBA(
-    image: LinearImageData | EncodedImageData
-  ): Float32Array | Uint8Array | Uint16Array {
-    if (image.channels === 4) {
-      // Already RGBA
-      return image.data;
-    }
-
-    // RGB → RGBA conversion
-    const pixelCount = image.width * image.height;
-
-    if (image.data instanceof Float32Array) {
-      const rgba = new Float32Array(pixelCount * 4);
-      for (let i = 0; i < pixelCount; i++) {
-        rgba[i * 4] = image.data[i * 3]; // R
-        rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
-        rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
-        rgba[i * 4 + 3] = 1.0; // A
-      }
-      return rgba;
-    }
-
-    if (image.data instanceof Uint16Array) {
-      const rgba = new Uint16Array(pixelCount * 4);
-      for (let i = 0; i < pixelCount; i++) {
-        rgba[i * 4] = image.data[i * 3]; // R
-        rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
-        rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
-        rgba[i * 4 + 3] = 65535; // A (max value for uint16)
-      }
-      return rgba;
-    }
-
-    // Uint8Array
-    const rgba = new Uint8Array(pixelCount * 4);
-    for (let i = 0; i < pixelCount; i++) {
-      rgba[i * 4] = image.data[i * 3]; // R
-      rgba[i * 4 + 1] = image.data[i * 3 + 1]; // G
-      rgba[i * 4 + 2] = image.data[i * 3 + 2]; // B
-      rgba[i * 4 + 3] = 255; // A (max value for uint8)
-    }
-    return rgba;
   }
 
   /**
    * Create render pipeline
    */
   private createPipeline(): void {
+    this.logger.log("[WebGPURenderer] Creating render pipeline");
+
     // Create shader module
     const shaderModule = this.device.createShaderModule({
       code: `${vertexShaderWGSL}\n\n${fragmentShaderWGSL}`,
     });
 
+    // Check for shader compilation errors
+    shaderModule.getCompilationInfo().then((info) => {
+      if (info.messages.length > 0) {
+        this.logger.warn(
+          "[WebGPURenderer] Shader compilation messages:",
+          info.messages,
+        );
+      }
+    });
+
     // Determine sample type based on texture format
     const sampleType =
-      this.currentTextureFormat === 'rgba32float' ? 'unfilterable-float' : 'float';
-    const samplerType = this.currentTextureFormat === 'rgba32float' ? 'non-filtering' : 'filtering';
+      this.currentTextureFormat === "rgba32float"
+        ? "unfilterable-float"
+        : "float";
+    const samplerType =
+      this.currentTextureFormat === "rgba32float"
+        ? "non-filtering"
+        : "filtering";
 
     // Update sampler if texture format changed
-    if (this.currentTextureFormat !== 'rgba32float') {
+    if (this.currentTextureFormat !== "rgba32float") {
       this.sampler = this.device.createSampler({
-        magFilter: 'linear',
-        minFilter: 'linear',
-        addressModeU: 'clamp-to-edge',
-        addressModeV: 'clamp-to-edge',
+        magFilter: "linear",
+        minFilter: "linear",
+        addressModeU: "clamp-to-edge",
+        addressModeV: "clamp-to-edge",
       });
     } else {
       // Recreate non-filtering sampler for rgba32float
       this.sampler = this.device.createSampler({
-        magFilter: 'nearest',
-        minFilter: 'nearest',
-        addressModeU: 'clamp-to-edge',
-        addressModeV: 'clamp-to-edge',
+        magFilter: "nearest",
+        minFilter: "nearest",
+        addressModeU: "clamp-to-edge",
+        addressModeV: "clamp-to-edge",
       });
     }
 
@@ -400,7 +385,7 @@ export class WebGPURenderer {
         {
           binding: 2,
           visibility: GPUShaderStage.FRAGMENT,
-          buffer: { type: 'uniform' },
+          buffer: { type: "uniform" },
         },
       ],
     });
@@ -412,11 +397,11 @@ export class WebGPURenderer {
       }),
       vertex: {
         module: shaderModule,
-        entryPoint: 'vs_main',
+        entryPoint: "vs_main",
       },
       fragment: {
         module: shaderModule,
-        entryPoint: 'fs_main',
+        entryPoint: "fs_main",
         targets: [
           {
             format: this.context.getCurrentTexture().format,
@@ -424,7 +409,7 @@ export class WebGPURenderer {
         ],
       },
       primitive: {
-        topology: 'triangle-strip',
+        topology: "triangle-strip",
       },
     });
 
@@ -446,14 +431,25 @@ export class WebGPURenderer {
         },
       ],
     });
+
+    this.logger.log("[WebGPURenderer] Render pipeline created successfully");
   }
 
   /**
    * Render with current settings
    */
   render(options: WebGPURenderOptions): void {
+    // Skip render if pipeline not ready (no image loaded yet)
+    if (!this.pipeline || !this.bindGroup || !this.texture) {
+      this.logger.warn("[WebGPURenderer] Skipping render - pipeline not ready");
+      return;
+    }
+
     // Reconfigure canvas if HDR mode or color space changed
-    if (options.hdrMode !== this.currentHDRMode || options.colorSpace !== this.currentColorSpace) {
+    if (
+      options.hdrMode !== this.currentHDRMode ||
+      options.colorSpace !== this.currentColorSpace
+    ) {
       this.reconfigureCanvas(options);
       this.currentHDRMode = options.hdrMode;
       this.currentColorSpace = options.colorSpace;
@@ -490,9 +486,14 @@ export class WebGPURenderer {
       colorAttachments: [
         {
           view: textureView,
-          loadOp: 'clear',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
-          storeOp: 'store',
+          loadOp: "clear",
+          clearValue: {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+            a: this.transparent ? 0.0 : 1.0,
+          },
+          storeOp: "store",
         },
       ],
     });
@@ -508,11 +509,11 @@ export class WebGPURenderer {
 
   private getToneMappingIndex(mode: string): number {
     switch (mode) {
-      case 'none':
+      case "none":
         return 0;
-      case 'reinhard':
+      case "reinhard":
         return 1;
-      case 'aces':
+      case "aces":
         return 2;
       default:
         return 1;
@@ -521,11 +522,11 @@ export class WebGPURenderer {
 
   private getVisualizationModeIndex(mode: string): number {
     switch (mode) {
-      case 'rgb':
+      case "rgb":
         return 0;
-      case 'luminance':
+      case "luminance":
         return 1;
-      case 'clipping':
+      case "clipping":
         return 2;
       default:
         return 0;
@@ -534,11 +535,11 @@ export class WebGPURenderer {
 
   private getColorSpaceIndex(colorSpace: ColorSpace): number {
     switch (colorSpace) {
-      case 'srgb':
+      case "srgb":
         return 0;
-      case 'display-p3':
+      case "display-p3":
         return 1;
-      case 'rec2020':
+      case "rec2020":
         return 2;
     }
   }
@@ -566,10 +567,10 @@ export class WebGPURenderer {
    * Note: Does NOT destroy the shared GPUDevice - only local resources
    */
   destroy(): void {
-    console.log('[WebGPURenderer] Destroying renderer');
+    this.logger.log("[WebGPURenderer] Destroying renderer");
 
     if (this.texture) this.texture.destroy();
     if (this.uniformBuffer) this.uniformBuffer.destroy();
-    // Don't destroy shared device - it's managed by gpu-device.ts singleton
+    this.preprocessor.destroy();
   }
 }

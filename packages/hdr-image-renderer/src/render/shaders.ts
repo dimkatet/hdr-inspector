@@ -4,6 +4,123 @@
  * HDR rendering pipeline with exposure, tone mapping, and PQ encoding.
  */
 
+export const preprocessComputeShaderWGSL = /* wgsl */ `
+// Compute shader for image preprocessing:
+// - RGB → RGBA conversion (adds alpha channel)
+// - Bit depth remapping (10/12-bit → 16-bit)
+// - Writes with 256-byte row alignment for copyBufferToTexture
+
+struct PreprocessParams {
+  width: u32,
+  height: u32,
+  channels: u32,         // 3 for RGB, 4 for RGBA
+  bitDepth: u32,         // 8, 10, 12, or 16
+  dataType: u32,         // 0 = Float32, 1 = Uint16, 2 = Uint8
+  rowStrideInU32: u32,   // Output row stride in u32 units (256-byte aligned)
+};
+
+@group(0) @binding(0) var<storage, read> inputData: array<u32>;
+@group(0) @binding(1) var<storage, read_write> outputData: array<u32>;
+@group(0) @binding(2) var<uniform> params: PreprocessParams;
+
+fn remapBitDepth(value: u32, bitDepth: u32) -> u32 {
+  if (bitDepth == 16u) {
+    return value;
+  }
+  let sourceMax = (1u << bitDepth) - 1u;
+  let remapped = (value * 65535u) / sourceMax;
+  return remapped;
+}
+
+// Read a u16 value from inputData at the given u16 index
+fn readU16(u16Idx: u32) -> u32 {
+  let u32Idx = u16Idx / 2u;
+  let val = inputData[u32Idx];
+  if (u16Idx % 2u == 0u) {
+    return val & 0xFFFFu;
+  }
+  return (val >> 16u) & 0xFFFFu;
+}
+
+// Read a u8 value from inputData at the given byte index
+fn readU8(byteIdx: u32) -> u32 {
+  let u32Idx = byteIdx / 4u;
+  let shift = (byteIdx % 4u) * 8u;
+  return (inputData[u32Idx] >> shift) & 0xFFu;
+}
+
+@compute @workgroup_size(8, 8)
+fn preprocess_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  let x = global_id.x;
+  let y = global_id.y;
+
+  if (x >= params.width || y >= params.height) {
+    return;
+  }
+
+  let pixelIdx = y * params.width + x;
+
+  if (params.dataType == 0u) {
+    // Float32: each float = 1 u32
+    let inputOffset = pixelIdx * params.channels;
+    let outputOffset = y * params.rowStrideInU32 + x * 4u;
+
+    outputData[outputOffset + 0u] = inputData[inputOffset + 0u];
+    outputData[outputOffset + 1u] = inputData[inputOffset + 1u];
+    outputData[outputOffset + 2u] = inputData[inputOffset + 2u];
+    if (params.channels == 3u) {
+      outputData[outputOffset + 3u] = 0x3F800000u; // 1.0f IEEE 754
+    } else {
+      outputData[outputOffset + 3u] = inputData[inputOffset + 3u];
+    }
+
+  } else if (params.dataType == 1u) {
+    // Uint16: 2 u16 per u32
+    let inputU16Offset = pixelIdx * params.channels;
+
+    var r = readU16(inputU16Offset);
+    var g = readU16(inputU16Offset + 1u);
+    var b = readU16(inputU16Offset + 2u);
+    var a: u32;
+
+    if (params.channels == 3u) {
+      a = 65535u;
+    } else {
+      a = readU16(inputU16Offset + 3u);
+      a = remapBitDepth(a, params.bitDepth);
+    }
+
+    r = remapBitDepth(r, params.bitDepth);
+    g = remapBitDepth(g, params.bitDepth);
+    b = remapBitDepth(b, params.bitDepth);
+
+    // Output: 2 u16 per u32, row-aligned
+    let outputU32Offset = y * params.rowStrideInU32 + x * 2u;
+    outputData[outputU32Offset]      = r | (g << 16u);
+    outputData[outputU32Offset + 1u] = b | (a << 16u);
+
+  } else {
+    // Uint8: 4 u8 per u32
+    let inputByteOffset = pixelIdx * params.channels;
+
+    let r = readU8(inputByteOffset);
+    let g = readU8(inputByteOffset + 1u);
+    let b = readU8(inputByteOffset + 2u);
+    var a: u32;
+
+    if (params.channels == 3u) {
+      a = 255u;
+    } else {
+      a = readU8(inputByteOffset + 3u);
+    }
+
+    // Output: 1 pixel per u32, row-aligned
+    let outputU32Offset = y * params.rowStrideInU32 + x;
+    outputData[outputU32Offset] = r | (g << 8u) | (b << 16u) | (a << 24u);
+  }
+}
+`;
+
 export const vertexShaderWGSL = /* wgsl */ `
 // Vertex shader for fullscreen quad
 

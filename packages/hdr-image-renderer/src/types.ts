@@ -51,6 +51,13 @@ export interface EncodedImageData {
   channels: 3 | 4;
   /** Transfer function applied to the data */
   transferFunction: 'srgb' | 'pq';
+  /**
+   * Bit depth of the encoded data (8, 10, 12, or 16 bits per channel)
+   * For Uint8Array: always 8
+   * For Uint16Array: can be 10, 12, or 16 (actual bit depth may differ from container size)
+   * If not specified, assumes full bit depth (8 for Uint8Array, 16 for Uint16Array)
+   */
+  bitDepth?: 8 | 10 | 12 | 16;
   /** Optional metadata */
   metadata?: {
     colorSpace?: string;
@@ -93,6 +100,8 @@ export interface HDRCanvasOptions {
   visualizationMode?: VisualizationMode;
   /** Enable transparent background */
   transparent?: boolean;
+  /** Enable debug logging to console (default: false) */
+  debug?: boolean;
 }
 
 /**
