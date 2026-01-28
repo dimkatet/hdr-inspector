@@ -8,6 +8,7 @@
 import type {
   ColorSpace,
   HDRCanvasOptions,
+  ObjectFit,
   RenderState,
   ToneMappingOperator,
   VisualizationMode,
@@ -19,6 +20,7 @@ export class RenderSettings {
   private hdrMode: boolean;
   private colorSpace: ColorSpace;
   private visualizationMode: VisualizationMode;
+  private objectFit: ObjectFit;
   private onChange: () => void;
 
   constructor(options: HDRCanvasOptions, onChange: () => void) {
@@ -27,6 +29,7 @@ export class RenderSettings {
     this.hdrMode = options.hdrMode ?? false;
     this.colorSpace = options.colorSpace ?? 'display-p3';
     this.visualizationMode = options.visualizationMode ?? 'rgb';
+    this.objectFit = options.objectFit ?? 'contain';
     this.onChange = onChange;
   }
 
@@ -40,6 +43,7 @@ export class RenderSettings {
       hdrMode: this.hdrMode,
       colorSpace: this.colorSpace,
       visualizationMode: this.visualizationMode,
+      objectFit: this.objectFit,
     };
   }
 
@@ -84,6 +88,14 @@ export class RenderSettings {
   }
 
   /**
+   * Set object-fit mode
+   */
+  setObjectFit(mode: ObjectFit): void {
+    this.objectFit = mode;
+    this.onChange();
+  }
+
+  /**
    * Batch update render options (single onChange call)
    */
   updateOptions(options: Partial<HDRCanvasOptions>): void {
@@ -92,6 +104,7 @@ export class RenderSettings {
     if (options.hdrMode !== undefined) this.hdrMode = options.hdrMode;
     if (options.colorSpace !== undefined) this.colorSpace = options.colorSpace;
     if (options.visualizationMode !== undefined) this.visualizationMode = options.visualizationMode;
+    if (options.objectFit !== undefined) this.objectFit = options.objectFit;
 
     this.onChange();
   }

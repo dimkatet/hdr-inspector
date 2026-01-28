@@ -174,6 +174,10 @@ struct Uniforms {
   canvasAspect: f32,      // Canvas width / height
   transparent: f32,       // 0=opaque background, 1=transparent
   inputTransferFunction: f32, // 0=linear, 1=srgb, 2=pq
+  objectFit: f32,         // 0=contain, 1=cover, 2=fill, 3=none, 4=scale-down
+  pixelScaleX: f32,       // imageWidth / canvasWidth (fraction of canvas image occupies at 1:1)
+  pixelScaleY: f32,       // imageHeight / canvasHeight (fraction of canvas image occupies at 1:1)
+  _pad: f32,              // alignment padding
 };
 
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
@@ -354,10 +358,39 @@ fn turboColormap(t_in: f32) -> vec3<f32> {
 
 // === Main Fragment Shader ===
 
-// Apply aspect ratio correction for "contain" fit
-// Returns UV offset and scale to fit image within canvas
-fn getContainTransform(imageAspect: f32, canvasAspect: f32) -> vec4<f32> {
-  // vec4: (scaleX, scaleY, offsetX, offsetY)
+// Apply object-fit transform
+// Returns UV offset and scale to position image within canvas
+// vec4: (scaleX, scaleY, offsetX, offsetY)
+//   scaleX/Y = fraction of canvas the image occupies in each axis
+//   offsetX/Y = canvas UV offset where the image starts
+fn getFitTransform(imageAspect: f32, canvasAspect: f32, objectFit: i32, pixelScaleX: f32, pixelScaleY: f32) -> vec4<f32> {
+  if (objectFit == 1) {
+    // COVER: fill canvas completely, crop excess
+    if (imageAspect > canvasAspect) {
+      // Image is wider - fit to height, crop sides
+      let scale = imageAspect / canvasAspect;
+      return vec4<f32>(scale, 1.0, (1.0 - scale) / 2.0, 0.0);
+    } else {
+      // Image is taller - fit to width, crop top/bottom
+      let scale = canvasAspect / imageAspect;
+      return vec4<f32>(1.0, scale, 0.0, (1.0 - scale) / 2.0);
+    }
+  } else if (objectFit == 2) {
+    // FILL: stretch to fill (no aspect ratio preservation)
+    return vec4<f32>(1.0, 1.0, 0.0, 0.0);
+  } else if (objectFit == 3) {
+    // NONE: natural size (1:1 pixel mapping), centered
+    return vec4<f32>(pixelScaleX, pixelScaleY, (1.0 - pixelScaleX) / 2.0, (1.0 - pixelScaleY) / 2.0);
+  } else if (objectFit == 4) {
+    // SCALE-DOWN: contain but never upscale
+    if (pixelScaleX <= 1.0 && pixelScaleY <= 1.0) {
+      // Image is smaller than canvas in both dimensions - use none (1:1)
+      return vec4<f32>(pixelScaleX, pixelScaleY, (1.0 - pixelScaleX) / 2.0, (1.0 - pixelScaleY) / 2.0);
+    }
+    // Image exceeds canvas in at least one dimension - fall through to contain
+  }
+
+  // CONTAIN (default): fit entire image within canvas
   if (imageAspect > canvasAspect) {
     // Image is wider than canvas - fit to width, letterbox top/bottom
     let scale = canvasAspect / imageAspect;
@@ -369,14 +402,14 @@ fn getContainTransform(imageAspect: f32, canvasAspect: f32) -> vec4<f32> {
   }
 }
 
-// Apply zoom and pan to UV coordinates with aspect ratio correction
-fn transformUV(uv: vec2<f32>, zoom: f32, panX: f32, panY: f32, imageAspect: f32, canvasAspect: f32) -> vec2<f32> {
-  // Get contain transform
-  let contain = getContainTransform(imageAspect, canvasAspect);
-  let scaleX = contain.x;
-  let scaleY = contain.y;
-  let offsetX = contain.z;
-  let offsetY = contain.w;
+// Apply zoom and pan to UV coordinates with object-fit correction
+fn transformUV(uv: vec2<f32>, zoom: f32, panX: f32, panY: f32, imageAspect: f32, canvasAspect: f32, objectFit: i32, pixelScaleX: f32, pixelScaleY: f32) -> vec2<f32> {
+  // Get fit transform based on object-fit mode
+  let fit = getFitTransform(imageAspect, canvasAspect, objectFit, pixelScaleX, pixelScaleY);
+  let scaleX = fit.x;
+  let scaleY = fit.y;
+  let offsetX = fit.z;
+  let offsetY = fit.w;
 
   // Transform canvas UV to image UV (accounting for letterbox/pillarbox)
   var imageUV = vec2<f32>(
@@ -393,8 +426,8 @@ fn transformUV(uv: vec2<f32>, zoom: f32, panX: f32, panY: f32, imageAspect: f32,
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-  // Apply viewport transform (zoom/pan) with aspect ratio correction
-  let transformedUV = transformUV(in.uv, uniforms.zoom, uniforms.panX, uniforms.panY, uniforms.imageAspect, uniforms.canvasAspect);
+  // Apply viewport transform (zoom/pan) with object-fit correction
+  let transformedUV = transformUV(in.uv, uniforms.zoom, uniforms.panX, uniforms.panY, uniforms.imageAspect, uniforms.canvasAspect, i32(uniforms.objectFit), uniforms.pixelScaleX, uniforms.pixelScaleY);
 
   // Sample texture first (must be in uniform control flow)
   // Clamp UV to valid range for sampling

@@ -1,16 +1,21 @@
 import { useEffect } from 'react';
 import type { HDRCanvas } from '../../HDRCanvas';
-import type { HDRCanvasOptions } from '../../types';
+import type { HDRCanvasOptions, ObjectFit } from '../../types';
 
 /**
  * Hook for synchronizing render options with HDRCanvas instance.
  * Uses batch updateOptions() method for efficiency.
+ *
+ * @param objectFitOverride - Resolved objectFit value from the React component
+ *   (e.g., 'auto' is resolved to 'contain' before reaching here)
  */
 export function useRenderOptions(
   instanceRef: React.RefObject<HDRCanvas | null>,
-  options: HDRCanvasOptions
+  options: HDRCanvasOptions,
+  objectFitOverride?: ObjectFit
 ): void {
-  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace } = options;
+  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace, objectFit } = options;
+  const resolvedObjectFit = objectFitOverride ?? objectFit;
 
   useEffect(() => {
     instanceRef.current?.render.updateOptions({
@@ -19,6 +24,7 @@ export function useRenderOptions(
       hdrMode,
       visualizationMode,
       colorSpace,
+      objectFit: resolvedObjectFit,
     });
-  }, [exposure, toneMapping, hdrMode, visualizationMode, colorSpace, instanceRef]);
+  }, [exposure, toneMapping, hdrMode, visualizationMode, colorSpace, resolvedObjectFit, instanceRef]);
 }

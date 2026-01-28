@@ -85,6 +85,18 @@ export type VisualizationMode = 'rgb' | 'luminance' | 'clipping';
 export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
 
 /**
+ * Object-fit mode for image display within the canvas.
+ * Controls how the image maps to the canvas at the base zoom level (zoom=1).
+ *
+ * - 'contain': Fit entire image within canvas, letterbox/pillarbox as needed (default)
+ * - 'cover': Fill canvas completely, crop excess edges
+ * - 'fill': Stretch image to fill canvas (no aspect ratio preservation)
+ * - 'none': Display at natural size (1:1 pixel mapping), centered
+ * - 'scale-down': Like 'contain' but never upscale small images
+ */
+export type ObjectFit = 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+
+/**
  * Options for HDRCanvas initialization
  */
 export interface HDRCanvasOptions {
@@ -98,6 +110,8 @@ export interface HDRCanvasOptions {
   colorSpace?: ColorSpace;
   /** Visualization mode */
   visualizationMode?: VisualizationMode;
+  /** Object-fit mode for image display (default: 'contain') */
+  objectFit?: ObjectFit;
   /** Enable transparent background */
   transparent?: boolean;
   /** Enable debug logging to console (default: false) */
@@ -113,6 +127,7 @@ export interface RenderState {
   visualizationMode: VisualizationMode;
   hdrMode: boolean;
   colorSpace: ColorSpace;
+  objectFit: ObjectFit;
 }
 
 export type UpdateListener = (state: ViewportState) => void;
@@ -366,6 +381,8 @@ export interface RenderAPI {
   setColorSpace(space: ColorSpace): void;
   /** Set visualization mode (rgb, luminance, clipping) */
   setVisualizationMode(mode: VisualizationMode): void;
+  /** Set object-fit mode (contain, cover, fill, none, scale-down) */
+  setObjectFit(mode: ObjectFit): void;
   /** Batch update multiple render options */
   updateOptions(options: Partial<HDRCanvasOptions>): void;
 }

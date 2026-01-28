@@ -8,6 +8,7 @@
 import type {
   ColorSpace,
   ImageData,
+  ObjectFit,
   TransferFunction,
   ViewportState,
 } from "../types";
@@ -23,6 +24,7 @@ export interface WebGPURenderOptions {
   visualizationMode: "rgb" | "luminance" | "clipping";
   hdrMode: boolean; // true = PQ output, false = sRGB output
   colorSpace: ColorSpace; // Color space for output
+  objectFit: ObjectFit; // Object-fit mode for image display
   viewport: ViewportState; // Zoom and pan state
 }
 
@@ -165,9 +167,9 @@ export class WebGPURenderer {
       addressModeV: "clamp-to-edge",
     });
 
-    // Create uniform buffer (exposure, toneMapping, visualizationMode, hdrMode, colorSpace, zoom, panX, panY, imageAspect, canvasAspect, transparent, inputTransferFunction)
+    // Create uniform buffer (12 original floats + objectFit, pixelScaleX, pixelScaleY, padding)
     this.uniformBuffer = this.device.createBuffer({
-      size: 48, // 12 floats * 4 bytes = 48 bytes
+      size: 64, // 16 floats * 4 bytes = 64 bytes
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -472,6 +474,10 @@ export class WebGPURenderer {
       canvasAspect,
       this.transparent ? 1.0 : 0.0,
       this.getTransferFunctionIndex(this.currentTransferFunction),
+      this.getObjectFitIndex(options.objectFit),
+      this.imageWidth / this.canvas.width, // pixelScaleX: fraction of canvas the image occupies at 1:1
+      this.imageHeight / this.canvas.height, // pixelScaleY: fraction of canvas the image occupies at 1:1
+      0.0, // padding for 16-byte alignment
     ]);
     this.device.queue.writeBuffer(this.uniformBuffer, 0, uniforms.buffer);
 
@@ -541,6 +547,21 @@ export class WebGPURenderer {
         return 1;
       case "rec2020":
         return 2;
+    }
+  }
+
+  private getObjectFitIndex(objectFit: ObjectFit): number {
+    switch (objectFit) {
+      case "contain":
+        return 0;
+      case "cover":
+        return 1;
+      case "fill":
+        return 2;
+      case "none":
+        return 3;
+      case "scale-down":
+        return 4;
     }
   }
 

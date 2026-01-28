@@ -8,6 +8,7 @@ import type {
   ImageLoader,
   KeyboardConfig,
   LoadingState,
+  ObjectFit,
   ViewportConfig,
   ViewportState,
   WheelConfig,
@@ -121,8 +122,16 @@ export interface HDRImageProps
   onViewportChange?: (viewport: ViewportState) => void;
   /** Callback when zoom changes (throttled for wheel/pinch, immediate for buttons) */
   onZoom?: (zoom: number, state: ViewportState) => void;
-  /** Auto-adjust canvas aspect ratio to match loaded image */
-  fitToImage?: boolean;
+  /**
+   * Object-fit mode for image display.
+   * - 'auto': Adjust canvas aspect-ratio to match image + use contain rendering (replaces fitToImage)
+   * - 'contain': Fit entire image within canvas, letterbox/pillarbox as needed (default)
+   * - 'cover': Fill canvas completely, crop excess edges
+   * - 'fill': Stretch image to fill canvas
+   * - 'none': Display at natural size (1:1 pixel mapping), centered
+   * - 'scale-down': Like contain but never upscale small images
+   */
+  objectFit?: ObjectFit | 'auto';
 }
 
 export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRImage(
@@ -139,7 +148,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     interactions = false,
     onViewportChange,
     onZoom,
-    fitToImage = false,
+    objectFit,
     className,
     style,
     ...rest
@@ -148,8 +157,17 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
 ) {
   const [aspectRatio, setAspectRatio] = useState<number | undefined>();
 
+  // Resolve objectFit: 'auto' → 'contain' for the library, other values pass through
+  const resolvedObjectFit = objectFit === 'auto' ? 'contain' as const : objectFit;
+
+  // Merge resolved objectFit into initial options so HDRCanvas starts with the correct value
+  // (avoids a first-frame flash where Settings defaults to 'contain' before useRenderOptions fires)
+  const initialOptions = resolvedObjectFit
+    ? { ...options, objectFit: resolvedObjectFit }
+    : options;
+
   // Initialize HDRCanvas instance
-  const { canvasRef, instanceRef } = useHDRCanvas(options, onError);
+  const { canvasRef, instanceRef } = useHDRCanvas(initialOptions, onError);
 
   // Subscribe to zoom changes
   useZoomCallback(instanceRef, onZoom);
@@ -170,15 +188,15 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     [instanceRef]
   );
 
-  // Handle image load with aspect ratio extraction
+  // Handle image load with aspect ratio extraction (for 'auto' objectFit)
   const handleLoad = useCallback(
     (info: ImageInfo) => {
-      if (fitToImage) {
+      if (objectFit === 'auto') {
         setAspectRatio(info.aspectRatio);
       }
       onLoad?.(info);
     },
-    [fitToImage, onLoad]
+    [objectFit, onLoad]
   );
 
   // Load image (supports both direct ImageData and async loader)
@@ -193,8 +211,8 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     onLoadingStateChange,
   });
 
-  // Sync render options
-  useRenderOptions(instanceRef, options);
+  // Sync render options (with resolved objectFit)
+  useRenderOptions(instanceRef, options, resolvedObjectFit);
 
   // Setup zoom/pan if enabled
   const viewportOptions: UseViewportOptions =
@@ -208,7 +226,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   const canvasStyle: React.CSSProperties = {
     ...style,
     cursor: viewportOptions.enabled ? 'grab' : undefined,
-    aspectRatio: fitToImage ? aspectRatio : style?.aspectRatio,
+    aspectRatio: objectFit === 'auto' ? aspectRatio : style?.aspectRatio,
     outline: 'none', // Remove focus outline for keyboard navigation
   };
 

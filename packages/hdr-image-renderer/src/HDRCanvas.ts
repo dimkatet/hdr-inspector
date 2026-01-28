@@ -86,6 +86,7 @@ export class HDRCanvas {
     setHDRMode: (enabled) => this.settings.setHDRMode(enabled),
     setColorSpace: (space) => this.settings.setColorSpace(space),
     setVisualizationMode: (mode) => this.settings.setVisualizationMode(mode),
+    setObjectFit: (mode) => this.settings.setObjectFit(mode),
     updateOptions: (options) => this.settings.updateOptions(options),
   };
 
@@ -151,7 +152,8 @@ export class HDRCanvas {
       () => {
         const rect = this.canvas.getBoundingClientRect();
         return { width: rect.width, height: rect.height };
-      }
+      },
+      () => this.settings.getState().objectFit
     );
 
     this.interactions = new InteractionManager(this.canvas, this.viewportController, () => ({

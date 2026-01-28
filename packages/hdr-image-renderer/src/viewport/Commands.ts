@@ -5,22 +5,25 @@
  * that delegate to ViewportController mutations.
  */
 
-import type { ViewportState } from '../types';
+import type { ObjectFit, ViewportState } from '../types';
 import type { ViewportController } from './Controller';
 
 export class ViewportCommands {
   private viewportController: ViewportController;
   private getImageDimensions: () => { width: number; height: number };
   private getCanvasSize: () => { width: number; height: number };
+  private getObjectFit: () => ObjectFit;
 
   constructor(
     viewportController: ViewportController,
     getImageDimensions: () => { width: number; height: number },
-    getCanvasSize: () => { width: number; height: number }
+    getCanvasSize: () => { width: number; height: number },
+    getObjectFit: () => ObjectFit
   ) {
     this.viewportController = viewportController;
     this.getImageDimensions = getImageDimensions;
     this.getCanvasSize = getCanvasSize;
+    this.getObjectFit = getObjectFit;
   }
 
   /**
@@ -76,14 +79,7 @@ export class ViewportCommands {
     const canvasSize = this.getCanvasSize();
     if (canvasSize.width === 0 || canvasSize.height === 0) return;
 
-    const imageAspect = imageDims.width / imageDims.height;
-    const canvasAspect = canvasSize.width / canvasSize.height;
-
-    const fitScale =
-      imageAspect > canvasAspect
-        ? canvasSize.width / imageDims.width
-        : canvasSize.height / imageDims.height;
-
+    const fitScale = this.computeBaseFitScale(imageDims, canvasSize);
     const actualZoom = 1 / fitScale;
 
     this.viewportController.applyMutation({
@@ -91,6 +87,47 @@ export class ViewportCommands {
       zoom: actualZoom,
       source: 'button',
     });
+  }
+
+  /**
+   * Compute the base fit scale for the current objectFit mode.
+   * This is the ratio of canvas pixels to image pixels at zoom=1.
+   */
+  private computeBaseFitScale(
+    imageDims: { width: number; height: number },
+    canvasSize: { width: number; height: number }
+  ): number {
+    const imageAspect = imageDims.width / imageDims.height;
+    const canvasAspect = canvasSize.width / canvasSize.height;
+    const objectFit = this.getObjectFit();
+
+    const containScale =
+      imageAspect > canvasAspect
+        ? canvasSize.width / imageDims.width
+        : canvasSize.height / imageDims.height;
+
+    switch (objectFit) {
+      case 'contain':
+        return containScale;
+
+      case 'cover':
+        // Cover uses the larger scale (opposite of contain)
+        return imageAspect > canvasAspect
+          ? canvasSize.height / imageDims.height
+          : canvasSize.width / imageDims.width;
+
+      case 'fill':
+        // Fill stretches non-uniformly; use contain scale as reasonable fallback
+        return containScale;
+
+      case 'none':
+        // At zoom=1, image is already at 1:1 pixels
+        return 1;
+
+      case 'scale-down':
+        // Contain but never upscale
+        return containScale < 1 ? containScale : 1;
+    }
   }
 
   /**

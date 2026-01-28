@@ -31,8 +31,9 @@ export class CanvasResizer {
         const { width, height } = entry.contentRect;
         const pixelWidth = Math.round(width * dpr);
         const pixelHeight = Math.round(height * dpr);
-
-        if (this.canvas.width !== pixelWidth || this.canvas.height !== pixelHeight) {
+        const dWidth = Math.abs(this.canvas.width - pixelWidth);
+        const dHeight = Math.abs(this.canvas.height - pixelHeight);
+        if (dWidth > dpr || dHeight > dpr) {
           this.canvas.width = pixelWidth;
           this.canvas.height = pixelHeight;
           this.onResize();

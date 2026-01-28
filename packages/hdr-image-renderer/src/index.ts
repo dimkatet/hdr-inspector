@@ -20,6 +20,7 @@ export type {
   ToneMappingOperator,
   VisualizationMode,
   ColorSpace,
+  ObjectFit,
   ViewportState,
   ViewportConfig,
   ViewportMutation,
