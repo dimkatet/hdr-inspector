@@ -10,7 +10,6 @@ export default defineConfig({
     topLevelAwait(),
     react(),
   ],
-  base: process.env.CI ? '/hdr-inspector/' : '/',
   optimizeDeps: {
     exclude: [
       '@dimkatet/jcodecs-avif',
