@@ -66,9 +66,9 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         transition: 'all 0.2s',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Drop HDR file here</p>
+      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Drop image file here</p>
       <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#888' }}>
-        Supported formats: Radiance HDR (.hdr, .pic)
+        Supported formats: AVIF, JPEG XL, JPEG Ultra HDR, PNG, Radiance HDR (.hdr, .pic)
       </p>
       <label
         style={{
@@ -84,7 +84,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         Choose File
         <input
           type="file"
-          accept=".hdr,.pic"
+          accept=".avif,.jxl,.jpg,.jpeg,.png,.hdr,.pic"
           onChange={handleInputChange}
           style={{ display: 'none' }}
         />

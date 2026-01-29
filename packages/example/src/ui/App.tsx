@@ -6,13 +6,14 @@
 
 import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
 import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer';
-import { useCallback, useEffect, useState } from 'react';
-import { decodeRadianceHDR, DecodeError } from '../decoders';
+import { decodeAuto, detectFormat, DecodeError } from '../decoders';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { syntheticImages } from '../utils/syntheticImages';
 import { Controls } from './Controls';
 import { FileDrop } from './FileDrop';
 import { HDRInfo } from './HDRInfo';
 import { ImageCanvas } from './ImageCanvas';
+import { Gallery, type GalleryImage } from './Gallery';
 
 function App() {
   const [image, setImage] = useState<ImageData | null>(null);
@@ -25,7 +26,13 @@ function App() {
     visualizationMode: 'rgb',
     hdrMode: false,
     colorSpace: 'srgb',
+    objectFit: 'contain',
   });
+
+  // Gallery state
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
+  const [isGalleryMode, setIsGalleryMode] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Detect HDR capabilities on mount
   useEffect(() => {
@@ -37,6 +44,40 @@ function App() {
     checkHDR();
   }, []);
 
+  // Handle multiple files for gallery (creates loaders, decoding happens in Gallery)
+  const handleMultipleFiles = useCallback(
+    (files: FileList) => {
+      setError(null);
+
+      const fileArray = Array.from(files);
+      console.log(`[Gallery] Creating loaders for ${fileArray.length} files...`);
+      // Create loader functions for each file (decoding is deferred to Gallery)
+      const galleryItems: GalleryImage[] = fileArray.map((file) => ({
+        id: `${file.name}-${Date.now()}-${Math.random()}`,
+        filename: file.name,
+        loader: async () => {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await decodeAuto(arrayBuffer);
+          
+          return result.data;
+        },
+      }));
+
+      setGalleryImages(galleryItems);
+      setIsGalleryMode(true);
+    },
+    [decodeAuto]
+  );
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      handleMultipleFiles(files);
+    }
+    // Reset input so same files can be selected again
+    e.target.value = '';
+  }, [handleMultipleFiles]);
+
   const handleFileLoaded = useCallback(async (file: File) => {
     try {
       setError(null);
@@ -45,15 +86,21 @@ function App() {
       // Read file as ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
 
-      // Decode based on file extension
-      let imageData: ImageData;
+      // Detect format
+      const format = detectFormat(arrayBuffer);
+      console.log('[App] Detected format:', format);
 
-      if (file.name.toLowerCase().endsWith('.hdr') || file.name.toLowerCase().endsWith('.pic')) {
-        // Radiance HDR
-        imageData = decodeRadianceHDR(arrayBuffer);
-      } else {
+
+      if (format === 'unknown') {
         throw new Error(`Unsupported format: ${file.name}`);
-      }
+      } 
+
+        // Use auto-decoder for AVIF, JXL, Gainmap, PNG
+      console.log('[App] Using auto-decoder for:', format);
+      const result = await decodeAuto(arrayBuffer);
+      console.log(result.data);
+      const imageData = result.data;
+      console.log('[App] Decoded:', result);
 
       setImage(imageData);
     } catch (err) {
@@ -82,15 +129,66 @@ function App() {
       >
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
         <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#888' }}>
-          Scene-referred linear HDR image viewer (powered by @dimkatet/hdr-image-renderer)
+          Multi-format HDR image viewer • Powered by @dimkatet/hdr-image-renderer + @dimkatet/hdr-decoders
         </p>
       </header>
 
+      {/* Hidden file input for multiple files */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".hdr,.pic,.avif,.jxl,.png,.jpg,.jpeg"
+        style={{ display: 'none' }}
+        onChange={handleFileInputChange}
+      />
+
       {/* Main Content */}
       <main style={{ padding: '24px', margin: '0 auto' }}>
-        {!image ? (
+        {isGalleryMode ? (
+          /* Gallery Mode */
+          <Gallery
+            images={galleryImages}
+            onClose={() => {
+              setIsGalleryMode(false);
+              setGalleryImages([]);
+            }}
+          />
+        ) : !image ? (
           <>
             <FileDrop onFileLoaded={handleFileLoaded} />
+
+            {/* Load Multiple Button */}
+            <div style={{
+              marginTop: '24px',
+              padding: '24px',
+              backgroundColor: '#1a1a1a',
+              borderRadius: '8px',
+              border: '1px solid #333'
+            }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 'bold' }}>
+                Performance Test:
+              </h3>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: '12px 24px',
+                  backgroundColor: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Load Multiple Images
+              </button>
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#666' }}>
+                Select multiple HDR images to display in a gallery grid (for WebGPU performance testing)
+              </p>
+            </div>
 
             {/* Synthetic Test Patterns */}
             <div style={{

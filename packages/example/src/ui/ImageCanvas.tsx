@@ -15,14 +15,15 @@ interface ImageCanvasProps {
 
 export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(1);
+  // const [zoom, setZoom] = useState(1);
   const hdrRef = useRef<HDRImageHandle>(null);
 
   const handleError = useCallback((err: Error) => setError(err.message), []);
 
-  const handleLoad = useCallback(() => setError(null), []);
-  const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
-  console.debug('debug: ImageCanvas render with image:', image, 'renderState:', renderState);
+  const handleLoad = useCallback(() => {
+    setError(null)
+  }, []);
+  // const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
 
   // Button style
   const btnStyle: React.CSSProperties = {
@@ -55,12 +56,12 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
       </div>
     );
   }
-
+  console.log('[ImageCanvas] Rerender call', renderState);
   return (
     <div>
       <HDRImage
         ref={hdrRef}
-        fitToImage
+        objectFit="auto"
         image={image ?? undefined}
         options={{
           ...renderState,
@@ -68,7 +69,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         }}
         onLoad={handleLoad}
         onError={handleError}
-        onZoom={handleZoom}
+        // onZoom={handleZoom}
         interactions={{
           wheel: { sensitivity: 0.0015 },
           drag: true,
@@ -80,7 +81,10 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         }}
         style={{
           display: 'block',
-          height: '60vh',
+          // height: '70%',
+          // width: 'auto'
+          width: '70%',
+          // width: 700
         }}
       />
 
@@ -98,7 +102,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
           -
         </button>
         <span style={{ color: '#ccc', minWidth: '60px', textAlign: 'center' }}>
-          {zoom.toFixed(2)}x
+          {/* {zoom.toFixed(2)}x */}
         </span>
         <button type="button" style={btnStyle} onClick={() => hdrRef.current?.zoomIn()}>
           +

@@ -18,6 +18,7 @@
  */
 
 import type { LinearImageData } from '@dimkatet/hdr-image-renderer';
+import type { DecodeResult } from './types';
 
 /**
  * Error thrown when decoding fails
@@ -30,9 +31,22 @@ export class DecodeError extends Error {
 }
 
 /**
+ * Check if buffer contains valid HDR data
+ *
+ * @param buffer - ArrayBuffer to check
+ * @returns boolean if buffer is Radiance HDR format
+ */
+export function isHDR(buffer: ArrayBuffer): boolean {
+  const magic = '#?RADIANCE\n';
+  const magicBytes = new Uint8Array(buffer, 0, magic.length);
+  const magicStr = new TextDecoder().decode(magicBytes);
+  return magicStr.startsWith('#?RADIANCE\n');
+}
+
+/**
  * Decodes Radiance HDR (.hdr, .pic) file format (RGBE encoding)
  */
-export function decodeRadianceHDR(arrayBuffer: ArrayBuffer): LinearImageData {
+export function decode(arrayBuffer: ArrayBuffer): DecodeResult<LinearImageData> {
   const data = new Uint8Array(arrayBuffer);
   let offset = 0;
 
@@ -83,9 +97,13 @@ export function decodeRadianceHDR(arrayBuffer: ArrayBuffer): LinearImageData {
   return {
     width,
     height,
-    data: rgbData,
-    channels,
-    transferFunction: 'linear' as const,
+    data: {
+      data: rgbData,
+      width,
+      height,
+      channels,
+      transferFunction: 'linear' as const,
+    },    
   };
 }
 

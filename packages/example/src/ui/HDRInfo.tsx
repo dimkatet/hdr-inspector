@@ -19,7 +19,6 @@ export function HDRInfo() {
     const detectCaps = async () => {
       const caps = await detectHDRCapabilities();
       setCapabilities(caps);
-      console.log('[HDRInfo] Detected capabilities:', caps);
     };
 
     detectCaps();
