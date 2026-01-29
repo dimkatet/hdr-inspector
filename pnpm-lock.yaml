@@ -45,8 +45,8 @@ importers:
         specifier: workspace:*
         version: link:../hdr-image-renderer
       '@dimkatet/jcodecs-avif':
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.3.0
+        version: 0.3.0
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -245,8 +245,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@dimkatet/jcodecs-avif@0.2.0':
-    resolution: {integrity: sha512-dvAHvAw7GkVV/iKk2ZpzGMP5KQaRlE13mDCFqBoH9fAed+SLHB+LivzTdMtA0KXfbbmbbCSE35UOwi9+T8o8Hg==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-avif/0.2.0/a77c9f4ec3efde8d8000e742febe454bcd6692af}
+  '@dimkatet/jcodecs-avif@0.3.0':
+    resolution: {integrity: sha512-jUN4TtnV/eS0Z4pgjYVmMqmokuNwdKVxXyGBGK24OaCIOp3qAgfIo8reOPGyzWawz69TuhmKUZw1qF9986PiIg==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-avif/0.3.0/f7bce047b027febde1d9f789f732044482d55063}
 
   '@dimkatet/jcodecs-core@0.2.0':
     resolution: {integrity: sha512-UFfDTHxfKKgiZxmc1ClTe1tLP9YQfKdwmGngPRJXOpWgR+JIUWiljfl4LoRONOeg1H5T17toJ803IFnF8rSd7Q==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-core/0.2.0/0cd66e79031b5e1023a1efc861ebd63503868bc1}
@@ -1400,7 +1400,7 @@ snapshots:
   '@biomejs/cli-win32-x64@1.9.4':
     optional: true
 
-  '@dimkatet/jcodecs-avif@0.2.0':
+  '@dimkatet/jcodecs-avif@0.3.0':
     dependencies:
       '@dimkatet/jcodecs-core': 0.2.0
 
