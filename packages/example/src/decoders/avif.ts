@@ -7,10 +7,10 @@
  * @see https://www.npmjs.com/package/@jsquash/avif
  */
 
-import { decodeInWorker, initWorkerPool } from "@dimkatet/jcodecs-avif";
+import type { EncodedImageData } from '@dimkatet/hdr-image-renderer';
+import { decodeInWorker, initWorkerPool } from '@dimkatet/jcodecs-avif';
 // import { decode as slowDecode} from '@jsquash/avif'
-import { DecodeError, type DecodeResult } from "./types";
-import type { EncodedImageData } from "@dimkatet/hdr-image-renderer";
+import { DecodeError, type DecodeResult } from './types';
 
 await initWorkerPool({
   poolSize: navigator.hardwareConcurrency || 4,
@@ -32,18 +32,16 @@ await initWorkerPool({
  * const result = await decode(buffer)
  *
  * // Use with HDRCanvas
- * canvas.loadImage(result.data)
+ * canvas.loading.upload(result.data)
  * ```
  */
 
-export async function decode(
-  buffer: ArrayBuffer,
-): Promise<DecodeResult<EncodedImageData>> {
+export async function decode(buffer: ArrayBuffer): Promise<DecodeResult<EncodedImageData>> {
   try {
     // const decoded = await decode2(buffer);
     const decoded = await decodeInWorker(buffer);
     if (!decoded) {
-      throw new Error("Failed to decode AVIF: decoder returned null");
+      throw new Error('Failed to decode AVIF: decoder returned null');
     }
 
     const { data, width, height, metadata, channels, bitDepth } = decoded;
@@ -53,7 +51,7 @@ export async function decode(
       width,
       height,
       channels: channels as 3 | 4,
-      transferFunction: metadata.transferFunction as "srgb" | "pq",
+      transferFunction: metadata.transferFunction as 'srgb' | 'pq',
       bitDepth, // Pass actual bit depth to renderer
     };
 
@@ -61,18 +59,14 @@ export async function decode(
       data: imageData,
       width,
       height,
-      colorSpace: metadata.colorPrimaries as
-        | "srgb"
-        | "display-p3"
-        | "rec2020"
-        | undefined,
+      colorSpace: metadata.colorPrimaries as 'srgb' | 'display-p3' | 'rec2020' | undefined,
       bitDepth,
     };
   } catch (error) {
     throw new DecodeError(
       `Failed to decode AVIF image: ${error instanceof Error ? error.message : String(error)}`,
-      "avif",
-      error,
+      'avif',
+      error
     );
   }
 }
@@ -92,21 +86,21 @@ export function isAVIF(buffer: ArrayBuffer): boolean {
     view.getUint8(4),
     view.getUint8(5),
     view.getUint8(6),
-    view.getUint8(7),
+    view.getUint8(7)
   );
 
-  if (ftyp !== "ftyp") return false;
+  if (ftyp !== 'ftyp') return false;
 
   // Check for avif/avis brand
   const brand = String.fromCharCode(
     view.getUint8(8),
     view.getUint8(9),
     view.getUint8(10),
-    view.getUint8(11),
+    view.getUint8(11)
   );
 
-  return brand === "avif" || brand === "avis";
+  return brand === 'avif' || brand === 'avis';
 }
 
-export { DecodeError } from "./types";
-export type { DecodeResult } from "./types";
+export type { DecodeResult } from './types';
+export { DecodeError } from './types';

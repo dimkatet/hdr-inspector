@@ -15,15 +15,41 @@ interface ImageCanvasProps {
 
 export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null);
-  // const [zoom, setZoom] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const hdrRef = useRef<HDRImageHandle>(null);
 
-  const handleError = useCallback((err: Error) => setError(err.message), []);
+  const handleError = useCallback((err: Error) => {
+    console.log(err);
+    setError(err.message);
+  }, []);
 
   const handleLoad = useCallback(() => {
-    setError(null)
+    setError(null);
   }, []);
-  // const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
+  const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
+
+  const handleExport = useCallback(async () => {
+    if (!hdrRef.current) return;
+
+    try {
+      setExporting(true);
+      const blob = await hdrRef.current.export({ type: 'image/png' });
+
+      // Download the exported PNG
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hdr-export-${Date.now()}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
 
   // Button style
   const btnStyle: React.CSSProperties = {
@@ -69,7 +95,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         }}
         onLoad={handleLoad}
         onError={handleError}
-        // onZoom={handleZoom}
+        onZoom={handleZoom}
         interactions={{
           wheel: { sensitivity: 0.0015 },
           drag: true,
@@ -102,7 +128,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
           -
         </button>
         <span style={{ color: '#ccc', minWidth: '60px', textAlign: 'center' }}>
-          {/* {zoom.toFixed(2)}x */}
+          {zoom.toFixed(2)}x
         </span>
         <button type="button" style={btnStyle} onClick={() => hdrRef.current?.zoomIn()}>
           +
@@ -115,6 +141,25 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         </button>
         <button type="button" style={btnStyle} onClick={() => hdrRef.current?.resetViewport()}>
           Reset
+        </button>
+
+        {/* Separator */}
+        <div style={{ width: '1px', height: '24px', backgroundColor: '#555', margin: '0 4px' }} />
+
+        {/* Export button */}
+        <button
+          type="button"
+          style={{
+            ...btnStyle,
+            backgroundColor: exporting ? '#666' : '#4a9eff',
+            cursor: exporting ? 'not-allowed' : 'pointer',
+            opacity: exporting ? 0.6 : 1,
+            minWidth: '100px',
+          }}
+          onClick={handleExport}
+          disabled={exporting || !image}
+        >
+          {exporting ? 'Exporting...' : 'Export PNG'}
         </button>
       </div>
     </div>

@@ -1,8 +1,9 @@
 // React component wrapper
 // Thin wrapper around HDRCanvas class with composable hooks
 
-import { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 'react';
 import type {
+  ExportOptions,
   HDRCanvasOptions,
   ImageData,
   ImageLoader,
@@ -89,8 +90,10 @@ export interface HDRImageHandle {
   getViewport: () => ViewportState;
   /** Set viewport state directly */
   setViewport: (viewport: Partial<ViewportState>) => void;
+  /** Export rendered image as Blob (PNG/JPEG by default, custom encoder via callback) */
+  export: (options?: ExportOptions) => Promise<Blob>;
   /** Get underlying HDRCanvas instance (advanced) */
-  getCanvas: () => import('../HDRCanvas').HDRCanvas | null;
+  getCanvas: () => import('../types').IHDRCanvas | null;
 }
 
 export interface HDRImageProps
@@ -158,13 +161,14 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   const [aspectRatio, setAspectRatio] = useState<number | undefined>();
 
   // Resolve objectFit: 'auto' → 'contain' for the library, other values pass through
-  const resolvedObjectFit = objectFit === 'auto' ? 'contain' as const : objectFit;
+  const resolvedObjectFit = objectFit === 'auto' ? ('contain' as const) : objectFit;
 
   // Merge resolved objectFit into initial options so HDRCanvas starts with the correct value
   // (avoids a first-frame flash where Settings defaults to 'contain' before useRenderOptions fires)
-  const initialOptions = resolvedObjectFit
-    ? { ...options, objectFit: resolvedObjectFit }
-    : options;
+  const initialOptions = useMemo(
+    () => (resolvedObjectFit ? { ...options, objectFit: resolvedObjectFit } : options),
+    [options, resolvedObjectFit]
+  );
 
   // Initialize HDRCanvas instance
   const { canvasRef, instanceRef } = useHDRCanvas(initialOptions, onError);
@@ -183,6 +187,12 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
       resetViewport: () => instanceRef.current?.viewport.reset(),
       getViewport: () => instanceRef.current?.viewport.getState() ?? { zoom: 1, panX: 0, panY: 0 },
       setViewport: (viewport) => instanceRef.current?.viewport.setViewport(viewport),
+      export: async (options?: ExportOptions) => {
+        if (!instanceRef.current) {
+          throw new Error('HDRCanvas instance not initialized');
+        }
+        return await instanceRef.current.export.toBlob(options);
+      },
       getCanvas: () => instanceRef.current,
     }),
     [instanceRef]
@@ -233,13 +243,12 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   return <canvas ref={canvasRef} className={className} style={canvasStyle} {...rest} />;
 });
 
-export type {
-  ImageInfo,
-  UseViewportOptions,
-  UseViewportResult,
-  UseImageLoaderOptions,
-  UseImageLoaderResult,
-} from './hooks';
-
 // Re-export loading types for convenience
 export type { ImageLoader, LoadingState, LoadOptions } from '../types';
+export type {
+  ImageInfo,
+  UseImageLoaderOptions,
+  UseImageLoaderResult,
+  UseViewportOptions,
+  UseViewportResult,
+} from './hooks';

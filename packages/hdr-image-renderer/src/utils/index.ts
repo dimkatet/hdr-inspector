@@ -3,5 +3,5 @@
  */
 
 export * from './color';
-export { detectHDRCapabilities, getCapabilitiesDescription } from './hdr-capabilities';
 export type { HDRCapabilities } from './hdr-capabilities';
+export { detectHDRCapabilities, getCapabilitiesDescription } from './hdr-capabilities';

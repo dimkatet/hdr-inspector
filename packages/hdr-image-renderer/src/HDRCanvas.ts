@@ -2,39 +2,27 @@
  * HDRCanvas - Main API (Facade)
  *
  * High-level interface for rendering HDR images with WebGPU.
- * Coordinates specialized components for rendering, viewport control, and interactions.
+ * Delegates to CanvasCore for coordination and lifecycle management.
+ *
+ * All service access uses typed ServiceMap — no concrete class imports needed.
  */
 
-import { ImageLoadingManager } from './ImageLoadingManager';
-import { InteractionManager } from './interaction';
-import { createLogger } from './logger';
-import { CanvasResizer, RenderSettings } from './render';
-import { WebGPURenderer } from './render';
-import { setGPUDeviceLogger } from './render/gpu-device';
+import { CanvasCore } from './core';
+import type { HDRCanvasEventMap } from './core/EventTypes';
+import type { EventBusOptions } from './core/TypedEventBus';
 import type {
   CanvasAPI,
+  ExportAPI,
   HDRCanvasOptions,
-  ImageData,
+  IHDRCanvas,
   InteractionAPI,
   LoadingAPI,
   RenderAPI,
   ViewportAPI,
 } from './types';
-import { ViewportCommands, ViewportController, ViewportSubscriptions } from './viewport';
 
-export class HDRCanvas {
-  private canvas: HTMLCanvasElement;
-  private renderer: WebGPURenderer;
-  private viewportController: ViewportController;
-  private initialized = false;
-
-  // Focused components
-  private settings: RenderSettings;
-  private commands: ViewportCommands;
-  private interactions: InteractionManager;
-  private resizer: CanvasResizer;
-  private subscriptions: ViewportSubscriptions;
-  private loadingManager: ImageLoadingManager;
+export class HDRCanvas implements IHDRCanvas {
+  private core: CanvasCore;
 
   // ============================================================
   // Namespaced API
@@ -44,131 +32,142 @@ export class HDRCanvas {
    * Viewport control API
    * Manages zoom, pan, and viewport state
    */
-  readonly viewport: ViewportAPI = {
-    // State
-    getState: () => this.viewportController.getState(),
-    setConfig: (config) => this.viewportController.updateConfig(config),
-
-    // Commands (instant)
-    setZoom: (zoom) => this.commands.setZoom(zoom),
-    setPan: (x, y) => this.commands.setPan(x, y),
-    setViewport: (viewport) => this.commands.setViewport(viewport),
-
-    // Commands (animated)
-    zoomIn: (factor) => this.commands.zoomIn(factor),
-    zoomOut: (factor) => this.commands.zoomOut(factor),
-    zoomToFit: () => this.commands.zoomToFit(),
-    zoomToActual: () => this.commands.zoomToActual(),
-    reset: (animated) => this.commands.reset(animated),
-
-    // Events
-    onZoom: (callback, throttleMs) => this.subscriptions.onZoom(callback, throttleMs),
-    onPan: (callback, throttleMs) => this.subscriptions.onPan(callback, throttleMs),
-    onUpdate: (callback) => this.subscriptions.onUpdate(callback),
-    onMutation: (listener) => this.subscriptions.onMutation(listener),
-    onTransitionEnd: (listener) => this.subscriptions.onTransitionEnd(listener),
-    onReset: (callback) => this.subscriptions.onReset(callback),
-
-    // Filtered events (convenience)
-    onWheelZoom: (callback) => this.subscriptions.onWheelZoom(callback),
-    onButtonZoom: (callback) => this.subscriptions.onButtonZoom(callback),
-    onDragPan: (callback) => this.subscriptions.onDragPan(callback),
-  };
+  readonly viewport: ViewportAPI;
 
   /**
    * Render settings API
    * Controls exposure, tone mapping, and visualization
    */
-  readonly render: RenderAPI = {
-    getState: () => this.settings.getState(),
-    setExposure: (ev) => this.settings.setExposure(ev),
-    setToneMapping: (operator) => this.settings.setToneMapping(operator),
-    setHDRMode: (enabled) => this.settings.setHDRMode(enabled),
-    setColorSpace: (space) => this.settings.setColorSpace(space),
-    setVisualizationMode: (mode) => this.settings.setVisualizationMode(mode),
-    setObjectFit: (mode) => this.settings.setObjectFit(mode),
-    updateOptions: (options) => this.settings.updateOptions(options),
-  };
+  readonly render: RenderAPI;
 
   /**
    * Interaction management API
    * Handles mouse, touch, and keyboard interactions
    */
-  readonly interaction: InteractionAPI = {
-    attach: (options) => this.interactions.attach(options),
-    detach: () => this.interactions.detach(),
-  };
+  readonly interaction: InteractionAPI;
 
   /**
    * Canvas control API
    * Canvas-specific operations (auto-resize, image info, etc.)
    */
-  readonly control: CanvasAPI = {
-    enableAutoResize: () => this.resizer.enable(),
-    disableAutoResize: () => this.resizer.disable(),
-    getImageDimensions: () => this.renderer.getImageDimensions(),
-    getImageInfo: () => {
-      const dims = this.renderer.getImageDimensions();
-      return {
-        width: dims.width,
-        height: dims.height,
-        aspectRatio: dims.width / dims.height,
-      };
-    },
-    forceRender: () => {
-      if (this.initialized) {
-        this.renderInternal();
-      }
-    },
-  };
+  readonly control: CanvasAPI;
+
+  /**
+   * Image export API
+   * Export rendered image as Blob (PNG/JPEG by default, custom via callback)
+   */
+  readonly export: ExportAPI;
 
   /**
    * Image loading API
    * Manages async image loading with placeholder and error fallback support
    */
-  readonly loading: LoadingAPI = {
-    load: (loader, options) => this.loadingManager.load(loader, options),
-    cancel: () => this.loadingManager.cancel(),
-    getState: () => this.loadingManager.getState(),
-    onStateChange: (callback) => this.loadingManager.onStateChange(callback),
-  };
+  readonly loading: LoadingAPI;
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
-    this.canvas = canvas;
+    this.core = new CanvasCore(canvas, options);
 
-    // Initialize core components
-    const logger = createLogger(options.debug ?? false);
-    setGPUDeviceLogger(logger);
-    this.renderer = new WebGPURenderer(canvas, { transparent: options.transparent, logger });
-    this.viewportController = new ViewportController();
-    this.viewportController.onUpdate(() => this.renderInternal());
+    // Initialize API namespaces AFTER core is created
+    // This ensures arrow functions capture the correct core instance during HMR
+    this.viewport = {
+      // State
+      getState: () => this.core.get('viewport').getState(),
+      setConfig: (config) => this.core.get('viewport').updateConfig(config),
 
-    // Initialize focused components
-    this.settings = new RenderSettings(options, () => this.renderInternal());
+      // Commands (instant)
+      setZoom: (zoom) => this.core.get('commands').setZoom(zoom),
+      setPan: (x, y) => this.core.get('commands').setPan(x, y),
+      setViewport: (viewport) => this.core.get('commands').setViewport(viewport),
 
-    this.commands = new ViewportCommands(
-      this.viewportController,
-      () => this.renderer.getImageDimensions(),
-      () => {
-        const rect = this.canvas.getBoundingClientRect();
-        return { width: rect.width, height: rect.height };
+      // Commands (animated)
+      zoomIn: (factor) => this.core.get('commands').zoomIn(factor),
+      zoomOut: (factor) => this.core.get('commands').zoomOut(factor),
+      zoomToFit: () => this.core.get('commands').zoomToFit(),
+      zoomToActual: () => this.core.get('commands').zoomToActual(),
+      reset: (animated) => this.core.get('commands').reset(animated),
+    };
+
+    this.render = {
+      getState: () => this.core.get('settings').getState(),
+      setExposure: (ev) => this.core.get('settings').setExposure(ev),
+      setToneMapping: (operator) => this.core.get('settings').setToneMapping(operator),
+      setHDRMode: (enabled) => this.core.get('settings').setHDRMode(enabled),
+      setColorSpace: (space) => this.core.get('settings').setColorSpace(space),
+      setVisualizationMode: (mode) => this.core.get('settings').setVisualizationMode(mode),
+      setObjectFit: (mode) => this.core.get('settings').setObjectFit(mode),
+      updateOptions: (options) => this.core.get('settings').updateOptions(options),
+    };
+
+    this.interaction = {
+      attach: (options) => this.core.get('interactions').attach(options),
+      detach: () => this.core.get('interactions').detach(),
+    };
+
+    this.control = {
+      enableAutoResize: () => this.core.get('resizer').enable(),
+      disableAutoResize: () => this.core.get('resizer').disable(),
+      getImageDimensions: () => this.core.get('renderer').getImageDimensions(),
+      getImageInfo: () => {
+        const dims = this.core.get('renderer').getImageDimensions();
+        return {
+          width: dims.width,
+          height: dims.height,
+          aspectRatio: dims.width / dims.height,
+        };
       },
-      () => this.settings.getState().objectFit
-    );
+      forceRender: () => {
+        if (this.core.lifecycle === 'ready') {
+          this.core.get('renderer').render({
+            ...this.core.get('settings').getState(),
+            viewport: this.core.get('viewport').getState(),
+          });
+        }
+      },
+    };
 
-    this.interactions = new InteractionManager(this.canvas, this.viewportController, () => ({
-      zoomIn: () => this.viewport.zoomIn(),
-      zoomOut: () => this.viewport.zoomOut(),
-      zoomToFit: () => this.viewport.zoomToFit(),
-      zoomToActual: () => this.viewport.zoomToActual(),
-    }));
+    this.export = {
+      toBlob: (options) => this.core.get('export').toBlob(options),
+    };
 
-    this.resizer = new CanvasResizer(this.canvas, () => this.control.forceRender());
-    this.subscriptions = new ViewportSubscriptions(this.viewportController);
-    this.loadingManager = new ImageLoadingManager(
-      (data) => this.loadImage(data),
-      () => this.control.getImageInfo()
-    );
+    this.loading = {
+      upload: (data) => this.core.get('loading').upload(data),
+      load: (loader, options) => this.core.get('loading').load(loader, options),
+      cancel: () => this.core.get('loading').cancel(),
+      getState: () => this.core.get('loading').getState(),
+    };
+  }
+
+  // ============================================================
+  // Event Subscription (Unified API)
+  // ============================================================
+
+  /**
+   * Subscribe to canvas events (unified event API)
+   *
+   * @param event - Event name (type-safe)
+   * @param callback - Event callback (data type inferred from event)
+   * @param options - Optional throttle configuration
+   * @returns Unsubscribe function
+   *
+   * @example
+   * // Viewport events
+   * canvas.on('viewport:mutation', (data) => {
+   *   if (data.mutation.type === 'zoom') {
+   *     console.log('Zoom:', data.mutation.zoom);
+   *   }
+   * });
+   *
+   * // Loading events
+   * canvas.on('loading:stateChange', (data) => {
+   *   console.log('State:', data.state);
+   * }, { throttle: 100 });
+   */
+  on<K extends keyof HDRCanvasEventMap>(
+    event: K,
+    callback: (data: HDRCanvasEventMap[K]) => void,
+    options?: EventBusOptions
+  ): () => void {
+    return this.core.getEventBus().on(event, callback, options);
   }
 
   // ============================================================
@@ -179,51 +178,17 @@ export class HDRCanvas {
    * Initialize WebGPU context (must be called before loading images)
    */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
-
-    await this.renderer.initialize();
-    this.initialized = true;
-  }
-
-  /**
-   * Load image from ImageData (LinearImageData or EncodedImageData)
-   */
-  async loadImage(data: ImageData): Promise<void> {
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
-    await this.renderer.uploadImage(data);
-    this.renderInternal();
+    await this.core.initialize();
   }
 
   // ============================================================
-  // Rendering
+  // Cleanup
   // ============================================================
-
-  /**
-   * Internal render method (called by viewport/settings changes)
-   */
-  private renderInternal(): void {
-    if (!this.initialized) return;
-
-    this.renderer.render({
-      ...this.settings.getState(),
-      viewport: this.viewportController.getState(),
-    });
-  }
 
   /**
    * Cleanup GPU resources
    */
   destroy(): void {
-    this.loadingManager.destroy();
-    this.resizer.disable();
-    this.interactions.detach();
-    this.viewportController.destroy();
-    if (this.initialized) {
-      this.renderer.destroy();
-      this.initialized = false;
-    }
+    this.core.destroy();
   }
 }

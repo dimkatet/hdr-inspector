@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { HDRCanvas } from '../../HDRCanvas';
-import type { KeyboardConfig, ViewportConfig, ViewportState, WheelConfig } from '../../types';
+import type {
+  IHDRCanvas,
+  KeyboardConfig,
+  ViewportConfig,
+  ViewportState,
+  WheelConfig,
+} from '../../types';
 
 export interface UseViewportOptions extends ViewportConfig {
   /** Enable zoom/pan interactions */
@@ -29,7 +34,7 @@ export interface UseViewportResult {
  * Thin wrapper around HDRCanvas.attachInteractions().
  */
 export function useViewport(
-  instanceRef: React.RefObject<HDRCanvas | null>,
+  instanceRef: React.RefObject<IHDRCanvas | null>,
   _canvasRef: React.RefObject<HTMLCanvasElement | null>,
   options: UseViewportOptions = {}
 ): UseViewportResult {
@@ -48,6 +53,7 @@ export function useViewport(
   }, [onViewportChange]);
 
   // Attach interactions when enabled
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO - need to verify which options should trigger re-attachment vs just updating config
   useEffect(() => {
     if (!enabled || !instanceRef.current) {
       return;
@@ -58,9 +64,9 @@ export function useViewport(
       keyboard,
     });
 
-    const unsubscribeViewport = instanceRef.current.viewport.onUpdate((v) => {
-      setViewport(v);
-      onViewportChangeRef.current?.(v);
+    const unsubscribeViewport = instanceRef.current.on('viewport:update', ({ state }) => {
+      setViewport(state);
+      onViewportChangeRef.current?.(state);
     });
 
     return () => {

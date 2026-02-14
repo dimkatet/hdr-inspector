@@ -103,7 +103,7 @@ export function decode(arrayBuffer: ArrayBuffer): DecodeResult<LinearImageData> 
       height,
       channels,
       transferFunction: 'linear' as const,
-    },    
+    },
   };
 }
 

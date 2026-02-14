@@ -5,12 +5,20 @@
  * with CSS display size, accounting for device pixel ratio.
  */
 
-export class CanvasResizer {
+import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { TypedEventBus } from '../core/TypedEventBus';
+import type { ResizeService } from './ResizeService';
+
+export class CanvasResizer implements ResizeService {
   private canvas: HTMLCanvasElement;
   private onResize: () => void;
   private observer: ResizeObserver | null = null;
 
-  constructor(canvas: HTMLCanvasElement, onResize: () => void) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    onResize: () => void,
+    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+  ) {
     this.canvas = canvas;
     this.onResize = onResize;
   }
@@ -37,6 +45,12 @@ export class CanvasResizer {
           this.canvas.width = pixelWidth;
           this.canvas.height = pixelHeight;
           this.onResize();
+
+          // Emit resize event
+          this.eventBus?.emit('canvas:resized', {
+            width: pixelWidth,
+            height: pixelHeight,
+          });
         }
       }
     });

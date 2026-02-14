@@ -1,20 +1,13 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
-import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
+import wasm from 'vite-plugin-wasm';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    wasm(),
-    topLevelAwait(),
-    react(),
-  ],
+  plugins: [wasm(), topLevelAwait(), react()],
   optimizeDeps: {
-    exclude: [
-      '@dimkatet/jcodecs-avif',
-      '@monogrid/gainmap-js',
-    ],
+    exclude: ['@dimkatet/jcodecs-avif', '@monogrid/gainmap-js'],
   },
   worker: {
     format: 'es',
@@ -22,12 +15,7 @@ export default defineConfig({
   },
   server: {
     fs: {
-      allow: [
-        ".",
-        "../../node_modules",
-        "/home/dimkatet/personal/hdr/jCodecs"
-      ]
-    }
-  }
-
+      allow: ['.', '../../node_modules', '/home/dimkatet/personal/hdr/jCodecs'],
+    },
+  },
 });

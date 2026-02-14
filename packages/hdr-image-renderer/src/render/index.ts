@@ -1,9 +1,15 @@
 /**
- * Render module - Settings, resizing, WebGPU renderer, and image preprocessing
+ * Render module - Settings, resizing, WebGPU renderer, and image processing
  */
 
-export { RenderSettings } from './Settings';
+export { GPUImagePreprocessor } from './GPUImagePreprocessor';
+export type { ImageAnalysis, ImagePreprocessor, PreprocessedImage } from './ImagePreprocessor';
+export type { PixelReadbackService } from './PixelReadbackService';
+export type { PixelReader, PixelValue } from './PixelReader';
+export { GPUPixelReader } from './PixelReader';
+export type { Renderer, RenderOptions } from './Renderer';
 export { CanvasResizer } from './Resizer';
+export type { ResizeService } from './ResizeService';
+export { RenderSettings } from './Settings';
+export { WebGPUReadbackService } from './WebGPUReadbackService';
 export { WebGPURenderer } from './WebGPURenderer';
-export { ImagePreprocessor } from './ImagePreprocessor';
-export type { ImageAnalysis, PreprocessedImage } from './ImagePreprocessor';

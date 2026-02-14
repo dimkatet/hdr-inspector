@@ -5,32 +5,49 @@
  * Coordinates loading state and delegates actual image upload to HDRCanvas.
  */
 
+import type { HDRCanvasEventMap } from './core/EventTypes';
+import type { TypedEventBus } from './core/TypedEventBus';
+import type { ImageUploadService } from './ImageUploadService';
 import type {
   ImageData,
   ImageInfo,
   ImageLoader,
+  LoadingAPI,
   LoadingState,
-  LoadingStateListener,
   LoadOptions,
 } from './types';
 
 /**
  * Manages async image loading with fallback support
  */
-export class ImageLoadingManager {
+export class ImageLoadingManager implements LoadingAPI {
   private state: LoadingState = { status: 'idle', displayedImage: 'none' };
-  private stateListeners = new Set<LoadingStateListener>();
   private abortController: AbortController | null = null;
 
-  private uploadFn: (data: ImageData) => Promise<void>;
-  private getImageInfoFn: () => ImageInfo;
-
   constructor(
-    uploadFn: (data: ImageData) => Promise<void>,
-    getImageInfoFn: () => ImageInfo
-  ) {
-    this.uploadFn = uploadFn;
-    this.getImageInfoFn = getImageInfoFn;
+    private uploadService: ImageUploadService,
+    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+  ) {}
+
+  /**
+   * Upload image data directly (synchronous path, no placeholder/fallback)
+   */
+  async upload(data: ImageData): Promise<ImageInfo> {
+    // Cancel any previous loading operation
+    this.cancel();
+
+    try {
+      this.setState({ status: 'loading', displayedImage: 'none' });
+
+      const info = await this.uploadService.upload(data);
+      this.setState({ status: 'success', displayedImage: 'main', error: undefined });
+
+      return info;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.setState({ status: 'error', displayedImage: 'none', error: err });
+      throw err;
+    }
   }
 
   /**
@@ -58,7 +75,7 @@ export class ImageLoadingManager {
     try {
       // Show placeholder if provided
       if (placeholder) {
-        await this.uploadFn(placeholder);
+        await this.uploadService.upload(placeholder);
         this.setState({ status: 'loading', displayedImage: 'placeholder' });
       } else {
         this.setState({ status: 'loading', displayedImage: 'none' });
@@ -73,10 +90,10 @@ export class ImageLoadingManager {
       }
 
       // Upload main image
-      await this.uploadFn(imageData);
+      const info = await this.uploadService.upload(imageData);
       this.setState({ status: 'success', displayedImage: 'main', error: undefined });
 
-      return this.getImageInfoFn();
+      return info;
     } catch (error) {
       // Handle cancellation
       if (signal.aborted) {
@@ -89,7 +106,7 @@ export class ImageLoadingManager {
       // Show error fallback if provided
       if (errorFallback) {
         try {
-          await this.uploadFn(errorFallback);
+          await this.uploadService.upload(errorFallback);
           this.setState({ status: 'error', displayedImage: 'error-fallback', error: err });
         } catch {
           // Failed to show error fallback, just set error state
@@ -127,22 +144,10 @@ export class ImageLoadingManager {
   }
 
   /**
-   * Subscribe to loading state changes
-   * @returns Unsubscribe function
-   */
-  onStateChange(callback: LoadingStateListener): () => void {
-    this.stateListeners.add(callback);
-    return () => {
-      this.stateListeners.delete(callback);
-    };
-  }
-
-  /**
    * Cleanup resources
    */
   destroy(): void {
     this.cancel();
-    this.stateListeners.clear();
   }
 
   /**
@@ -154,12 +159,12 @@ export class ImageLoadingManager {
   }
 
   /**
-   * Notify all listeners of state change
+   * Emit loading state change event via EventBus
    */
   private emitStateChange(): void {
-    const stateCopy = { ...this.state };
-    for (const listener of this.stateListeners) {
-      listener(stateCopy);
-    }
+    this.eventBus?.emit('loading:stateChange', {
+      state: this.state,
+      type: this.state.displayedImage,
+    });
   }
 }

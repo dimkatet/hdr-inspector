@@ -13,10 +13,7 @@ interface FileDropProps {
 export function FileDrop({ onFileLoaded }: FileDropProps) {
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleFile = useCallback(
-    (file: File) => onFileLoaded(file),
-    [onFileLoaded]
-  );
+  const handleFile = useCallback((file: File) => onFileLoaded(file), [onFileLoaded]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -51,6 +48,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: because this is a simple demo component, not a production-ready one
     <div
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -66,7 +64,9 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         transition: 'all 0.2s',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>Drop image file here</p>
+      <p style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 'bold' }}>
+        Drop image file here
+      </p>
       <p style={{ margin: '0 0 16px', fontSize: '14px', color: '#888' }}>
         Supported formats: AVIF, JPEG XL, JPEG Ultra HDR, PNG, Radiance HDR (.hdr, .pic)
       </p>

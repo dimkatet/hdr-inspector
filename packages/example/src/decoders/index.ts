@@ -22,18 +22,18 @@
  * const result = await decodeAuto(buffer)
  *
  * // Use with HDRCanvas
- * canvas.loadImage(result.data)
+ * canvas.loading.upload(result.data)
  * ```
  */
 
-import type { EncodedImageData, LinearImageData } from '@dimkatet/hdr-image-renderer'
-import { decode as decodeAVIF, isAVIF } from './avif'
-import { decode as decodeHDR, isHDR } from './radiance'
+import type { EncodedImageData, LinearImageData } from '@dimkatet/hdr-image-renderer';
+import { decode as decodeAVIF, isAVIF } from './avif';
+import { decode as decodeHDR, isHDR } from './radiance';
+import type { DecodeResult } from './types';
 // import { decode as decodeJXL, isJXL } from './jxl'
 // import { decode as decodeGainmap, isUltraHDR } from './gainmap'
 // import { decode as decodePNG, isPNG } from './png'
-import { DecodeError } from './types'
-import type { DecodeResult } from './types'
+import { DecodeError } from './types';
 
 /**
  * Auto-detect format and decode image
@@ -59,11 +59,11 @@ export async function decodeAuto(
   // }
 
   if (isAVIF(buffer)) {
-    return decodeAVIF(buffer)
+    return decodeAVIF(buffer);
   }
 
   if (isHDR(buffer)) {
-    return decodeHDR(buffer)
+    return decodeHDR(buffer);
   }
 
   // if (isJXL(buffer)) {
@@ -74,7 +74,7 @@ export async function decodeAuto(
   //   return decodeGainmap(buffer, options)
   // }
 
-  throw new DecodeError('Unsupported image format', 'unknown')
+  throw new DecodeError('Unsupported image format', 'unknown');
 }
 
 /**
@@ -83,21 +83,22 @@ export async function decodeAuto(
  * @param buffer - ArrayBuffer to check
  * @returns Format name or 'unknown'
  */
-export function detectFormat(buffer: ArrayBuffer): 'avif' | 'jxl' | 'gainmap' | 'png' | 'hdr' | 'unknown' {
+export function detectFormat(
+  buffer: ArrayBuffer
+): 'avif' | 'jxl' | 'gainmap' | 'png' | 'hdr' | 'unknown' {
   // if (isPNG(buffer)) return 'png'
-  if (isAVIF(buffer)) return 'avif'
-  if (isHDR(buffer)) return 'hdr'
+  if (isAVIF(buffer)) return 'avif';
+  if (isHDR(buffer)) return 'hdr';
   // if (isJXL(buffer)) return 'jxl'
   // if (isUltraHDR(buffer)) return 'gainmap'
-  return 'unknown'
+  return 'unknown';
 }
 
-// Re-export everything from modules
-export { DecodeError } from './types'
-export type { DecodeResult } from './types'
-
 // Re-export format checkers
-export { isAVIF } from './avif'
-export { isHDR } from './radiance'
+export { isAVIF } from './avif';
+export { isHDR } from './radiance';
+export type { DecodeResult } from './types';
+// Re-export everything from modules
+export { DecodeError } from './types';
 // export { isUltraHDR } from './gainmap'
 // export { isPNG } from './png'

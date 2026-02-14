@@ -5,9 +5,9 @@
  */
 
 import {
-  type HDRCapabilities,
   detectHDRCapabilities,
   getCapabilitiesDescription,
+  type HDRCapabilities,
 } from '@dimkatet/hdr-image-renderer';
 import { useEffect, useState } from 'react';
 

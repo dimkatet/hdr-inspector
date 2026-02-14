@@ -3,10 +3,12 @@
  *
  * Creates and manages MouseHandler, TouchHandler, and KeyboardHandler instances.
  * Wires up callbacks from handlers to viewport mutations and commands.
+ *
+ * Uses InteractionTarget interface to decouple from specific viewport implementations.
  */
 
-import type { InteractionOptions, ViewportConfig } from '../types';
-import type { ViewportController } from '../viewport/Controller';
+import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
+import type { InteractionTarget } from './InteractionTarget';
 import { KeyboardHandler } from './KeyboardHandler';
 import { MouseHandler } from './MouseHandler';
 import { TouchHandler } from './TouchHandler';
@@ -18,19 +20,19 @@ interface ZoomCommands {
   zoomToActual: () => void;
 }
 
-export class InteractionManager {
+export class InteractionManager implements InteractionAPI {
   private canvas: HTMLCanvasElement;
-  private viewportController: ViewportController;
+  private target: InteractionTarget;
   private getZoomCommands: () => ZoomCommands;
   private cleanupFunctions: Array<() => void> = [];
 
   constructor(
     canvas: HTMLCanvasElement,
-    viewportController: ViewportController,
+    target: InteractionTarget,
     getZoomCommands: () => ZoomCommands
   ) {
     this.canvas = canvas;
-    this.viewportController = viewportController;
+    this.target = target;
     this.getZoomCommands = getZoomCommands;
   }
 
@@ -47,7 +49,7 @@ export class InteractionManager {
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
-      this.viewportController.updateConfig(viewportConfig as Partial<ViewportConfig>);
+      this.target.updateConfig(viewportConfig as Partial<ViewportConfig>);
     }
 
     // Parse wheel config
@@ -61,10 +63,10 @@ export class InteractionManager {
         onWheel: (deltaY, cursorX, cursorY) => {
           // Calculate zoom from wheel delta
           const zoomDelta = -deltaY * wheelSensitivity;
-          const currentZoom = this.viewportController.getState().zoom;
+          const currentZoom = this.target.getState().zoom;
           const newZoom = currentZoom * Math.exp(zoomDelta);
 
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'zoom',
             zoom: newZoom,
             centerX: cursorX,
@@ -73,14 +75,14 @@ export class InteractionManager {
           });
         },
         onDrag: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'pan',
             deltaX,
             deltaY,
             source: 'drag',
           }),
         onDblClick: () =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'reset',
             source: 'dblclick',
           }),
@@ -93,7 +95,7 @@ export class InteractionManager {
       this.canvas,
       {
         onPan: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'pan',
             deltaX,
             deltaY,
@@ -101,10 +103,10 @@ export class InteractionManager {
           }),
         onPinch: (scaleDelta, centerX, centerY) => {
           // Calculate new zoom from pinch scale
-          const currentZoom = this.viewportController.getState().zoom;
+          const currentZoom = this.target.getState().zoom;
           const newZoom = currentZoom * scaleDelta;
 
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'zoom',
             zoom: newZoom,
             centerX,
@@ -113,7 +115,7 @@ export class InteractionManager {
           });
         },
         onDoubleTap: () =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'reset',
             source: 'doubletap',
           }),
@@ -129,7 +131,7 @@ export class InteractionManager {
       this.canvas,
       {
         onPan: (deltaX, deltaY) =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'pan',
             deltaX,
             deltaY,
@@ -140,7 +142,7 @@ export class InteractionManager {
         onZoomToFit: () => commands.zoomToFit(),
         onZoomToActual: () => commands.zoomToActual(),
         onReset: () =>
-          this.viewportController.applyMutation({
+          this.target.applyMutation({
             type: 'reset',
             source: 'keyboard',
             duration: 0,

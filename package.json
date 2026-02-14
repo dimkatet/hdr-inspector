@@ -18,7 +18,7 @@
   },
   "dependencies": {},
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.3.15",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
@@ -26,11 +26,6 @@
     "@webgpu/types": "^0.1.68",
     "turbo": "^2.7.4",
     "typescript": "~5.9.3",
-    "vite": "npm:rolldown-vite@7.2.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "npm:rolldown-vite@7.2.5"
-    }
+    "vite": "^7.2.5"
   }
 }

@@ -5,16 +5,19 @@
  * with change notification for re-rendering.
  */
 
+import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { TypedEventBus } from '../core/TypedEventBus';
 import type {
   ColorSpace,
   HDRCanvasOptions,
   ObjectFit,
+  RenderAPI,
   RenderState,
   ToneMappingOperator,
   VisualizationMode,
 } from '../types';
 
-export class RenderSettings {
+export class RenderSettings implements RenderAPI {
   private exposure: number;
   private toneMapping: ToneMappingOperator;
   private hdrMode: boolean;
@@ -23,7 +26,11 @@ export class RenderSettings {
   private objectFit: ObjectFit;
   private onChange: () => void;
 
-  constructor(options: HDRCanvasOptions, onChange: () => void) {
+  constructor(
+    options: HDRCanvasOptions,
+    onChange: () => void,
+    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+  ) {
     this.exposure = options.exposure ?? 0;
     this.toneMapping = options.toneMapping ?? 'aces';
     this.hdrMode = options.hdrMode ?? false;
@@ -48,11 +55,20 @@ export class RenderSettings {
   }
 
   /**
+   * Notify about render settings change
+   * Calls onChange callback and emits event via EventBus
+   */
+  private notifyChange(): void {
+    this.onChange(); // Internal re-render
+    this.eventBus?.emit('render:settingsChanged', { settings: this.getState() });
+  }
+
+  /**
    * Set exposure value in stops (EV)
    */
   setExposure(ev: number): void {
     this.exposure = ev;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -60,7 +76,7 @@ export class RenderSettings {
    */
   setToneMapping(operator: ToneMappingOperator): void {
     this.toneMapping = operator;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -68,7 +84,7 @@ export class RenderSettings {
    */
   setHDRMode(enabled: boolean): void {
     this.hdrMode = enabled;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -76,7 +92,7 @@ export class RenderSettings {
    */
   setColorSpace(colorSpace: ColorSpace): void {
     this.colorSpace = colorSpace;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -84,7 +100,7 @@ export class RenderSettings {
    */
   setVisualizationMode(mode: VisualizationMode): void {
     this.visualizationMode = mode;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -92,7 +108,7 @@ export class RenderSettings {
    */
   setObjectFit(mode: ObjectFit): void {
     this.objectFit = mode;
-    this.onChange();
+    this.notifyChange();
   }
 
   /**
@@ -106,6 +122,6 @@ export class RenderSettings {
     if (options.visualizationMode !== undefined) this.visualizationMode = options.visualizationMode;
     if (options.objectFit !== undefined) this.objectFit = options.objectFit;
 
-    this.onChange();
+    this.notifyChange();
   }
 }

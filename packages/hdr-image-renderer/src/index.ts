@@ -1,46 +1,60 @@
 // Core exports for vanilla JS API
 
+// Event system exports
+export type { HDRCanvasEventMap } from './core/EventTypes';
+export type { EventBusOptions } from './core/TypedEventBus';
+export type { ImageEncoder, PixelReadback } from './export';
 export { HDRCanvas } from './HDRCanvas';
 export { ImageLoadingManager } from './ImageLoadingManager';
+export type { ImageUploadService } from './ImageUploadService';
+export { KeyboardHandler, MouseHandler, TouchHandler } from './interaction';
+export { destroySharedDevice } from './render/gpu-device';
+export type { PixelReadbackService } from './render/PixelReadbackService';
+export type { Renderer, RenderOptions } from './render/Renderer';
+export type { ResizeService } from './render/ResizeService';
+export { WebGPUReadbackService } from './render/WebGPUReadbackService';
+export type {
+  CanvasAPI,
+  ColorSpace,
+  DisplayedImageType,
+  EncodedImageData,
+  ExportAPI,
+  // Export types
+  ExportOptions,
+  HDRCanvasOptions,
+  IHDRCanvas,
+  ImageData,
+  ImageInfo,
+  // Loading types
+  ImageLoader,
+  InteractionAPI,
+  InteractionOptions,
+  KeyboardConfig,
+  LinearImageData,
+  LoadingState,
+  LoadingStateListener,
+  LoadOptions,
+  MouseConfig,
+  MutationSource,
+  ObjectFit,
+  RenderAPI,
+  RenderState,
+  ToneMappingOperator,
+  TouchConfig,
+  TransferFunction,
+  // Namespaced API interfaces
+  ViewportAPI,
+  ViewportConfig,
+  ViewportMutation,
+  ViewportState,
+  VisualizationMode,
+  WheelConfig,
+} from './types';
 export {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   type HDRCapabilities,
 } from './utils';
-export { destroySharedDevice } from './render/gpu-device';
 export { ViewportController } from './viewport';
-export { MouseHandler, TouchHandler, KeyboardHandler } from './interaction';
-export type {
-  HDRCanvasOptions,
-  RenderState,
-  LinearImageData,
-  EncodedImageData,
-  ImageData,
-  TransferFunction,
-  ToneMappingOperator,
-  VisualizationMode,
-  ColorSpace,
-  ObjectFit,
-  ViewportState,
-  ViewportConfig,
-  ViewportMutation,
-  MutationSource,
-  ImageInfo,
-  InteractionOptions,
-  MouseConfig,
-  TouchConfig,
-  WheelConfig,
-  KeyboardConfig,
-  // Namespaced API interfaces
-  ViewportAPI,
-  RenderAPI,
-  InteractionAPI,
-  CanvasAPI,
-  LoadingAPI,
-  // Loading types
-  ImageLoader,
-  LoadOptions,
-  LoadingState,
-  LoadingStateListener,
-  DisplayedImageType,
-} from './types';
+export type { ViewportCommandService } from './viewport/ViewportCommandService';
+export { WebGPUUploadService } from './WebGPUUploadService';

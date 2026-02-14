@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { HDRCanvas } from '../../HDRCanvas';
-import type { HDRCanvasOptions } from '../../types';
+import type { HDRCanvasOptions, IHDRCanvas } from '../../types';
 
 export interface UseHDRCanvasResult {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
-  instanceRef: React.RefObject<HDRCanvas | null>;
+  instanceRef: React.RefObject<IHDRCanvas | null>;
 }
 
 /**
@@ -18,18 +18,27 @@ export function useHDRCanvas(
 ): UseHDRCanvasResult {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const instanceRef = useRef<HDRCanvas | null>(null);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   // Initialize HDRCanvas instance with auto-resize
+  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO - need to verify if initialOptions should trigger re-initialization or just be captured in closure
   useEffect(() => {
     if (!canvasRef.current) return;
 
     let cleanup: (() => void) | undefined;
 
     try {
-      instanceRef.current = new HDRCanvas(canvasRef.current, initialOptions);
-      cleanup = instanceRef.current.control.enableAutoResize();
+      const canvas = new HDRCanvas(canvasRef.current, initialOptions);
+      canvas.initialize().then(() => {
+        instanceRef.current = canvas;
+        cleanup = canvas.control.enableAutoResize();
+      });
     } catch (error) {
-      onError?.(error as Error);
+      onErrorRef.current?.(error as Error);
     }
 
     return () => {
@@ -37,7 +46,6 @@ export function useHDRCanvas(
       instanceRef.current?.destroy();
       instanceRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only on mount - initialOptions captured in closure
 
   return { canvasRef, instanceRef };

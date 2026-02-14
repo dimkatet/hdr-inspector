@@ -6,14 +6,14 @@
 
 import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
 import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer';
-import { decodeAuto, detectFormat, DecodeError } from '../decoders';
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { DecodeError, decodeAuto, detectFormat } from '../decoders';
 import { syntheticImages } from '../utils/syntheticImages';
 import { Controls } from './Controls';
 import { FileDrop } from './FileDrop';
+import { Gallery, type GalleryImage } from './Gallery';
 import { HDRInfo } from './HDRInfo';
 import { ImageCanvas } from './ImageCanvas';
-import { Gallery, type GalleryImage } from './Gallery';
 
 function App() {
   const [image, setImage] = useState<ImageData | null>(null);
@@ -58,7 +58,7 @@ function App() {
         loader: async () => {
           const arrayBuffer = await file.arrayBuffer();
           const result = await decodeAuto(arrayBuffer);
-          
+
           return result.data;
         },
       }));
@@ -69,14 +69,17 @@ function App() {
     [decodeAuto]
   );
 
-  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleMultipleFiles(files);
-    }
-    // Reset input so same files can be selected again
-    e.target.value = '';
-  }, [handleMultipleFiles]);
+  const handleFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleMultipleFiles(files);
+      }
+      // Reset input so same files can be selected again
+      e.target.value = '';
+    },
+    [handleMultipleFiles]
+  );
 
   const handleFileLoaded = useCallback(async (file: File) => {
     try {
@@ -90,12 +93,11 @@ function App() {
       const format = detectFormat(arrayBuffer);
       console.log('[App] Detected format:', format);
 
-
       if (format === 'unknown') {
         throw new Error(`Unsupported format: ${file.name}`);
-      } 
+      }
 
-        // Use auto-decoder for AVIF, JXL, Gainmap, PNG
+      // Use auto-decoder for AVIF, JXL, Gainmap, PNG
       console.log('[App] Using auto-decoder for:', format);
       const result = await decodeAuto(arrayBuffer);
       console.log(result.data);
@@ -129,7 +131,8 @@ function App() {
       >
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
         <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#888' }}>
-          Multi-format HDR image viewer • Powered by @dimkatet/hdr-image-renderer + @dimkatet/hdr-decoders
+          Multi-format HDR image viewer • Powered by @dimkatet/hdr-image-renderer +
+          @dimkatet/hdr-decoders
         </p>
       </header>
 
@@ -159,13 +162,15 @@ function App() {
             <FileDrop onFileLoaded={handleFileLoaded} />
 
             {/* Load Multiple Button */}
-            <div style={{
-              marginTop: '24px',
-              padding: '24px',
-              backgroundColor: '#1a1a1a',
-              borderRadius: '8px',
-              border: '1px solid #333'
-            }}>
+            <div
+              style={{
+                marginTop: '24px',
+                padding: '24px',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                border: '1px solid #333',
+              }}
+            >
               <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 'bold' }}>
                 Performance Test:
               </h3>
@@ -186,18 +191,21 @@ function App() {
                 Load Multiple Images
               </button>
               <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#666' }}>
-                Select multiple HDR images to display in a gallery grid (for WebGPU performance testing)
+                Select multiple HDR images to display in a gallery grid (for WebGPU performance
+                testing)
               </p>
             </div>
 
             {/* Synthetic Test Patterns */}
-            <div style={{
-              marginTop: '24px',
-              padding: '24px',
-              backgroundColor: '#1a1a1a',
-              borderRadius: '8px',
-              border: '1px solid #333'
-            }}>
+            <div
+              style={{
+                marginTop: '24px',
+                padding: '24px',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                border: '1px solid #333',
+              }}
+            >
               <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 'bold' }}>
                 Or try synthetic test patterns:
               </h3>
@@ -261,7 +269,8 @@ function App() {
                 ))}
               </div>
               <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#666' }}>
-                Test different ImageData formats: Float32 (linear HDR), Uint8 (sRGB), Uint16 (sRGB/PQ)
+                Test different ImageData formats: Float32 (linear HDR), Uint8 (sRGB), Uint16
+                (sRGB/PQ)
               </p>
             </div>
           </>

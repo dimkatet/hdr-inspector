@@ -2,6 +2,8 @@
  * Viewport module - State management, commands, and event subscriptions
  */
 
-export { ViewportController } from './Controller';
 export { ViewportCommands } from './Commands';
-export { ViewportSubscriptions } from './Subscriptions';
+export { ViewportController } from './Controller';
+export type { Dimensions } from './LayoutService';
+export { ViewportLayoutService } from './LayoutService';
+export type { ViewportCommandService } from './ViewportCommandService';

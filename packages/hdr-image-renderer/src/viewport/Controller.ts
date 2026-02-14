@@ -3,17 +3,14 @@
  *
  * Handles viewport state management, animation, and input processing.
  * Can be used standalone or integrated into HDRCanvas.
+ *
+ * Implements InteractionTarget to receive user interactions from handlers.
  */
 
-import type {
-  EasingFunction,
-  MutationListener,
-  TransitionEndListener,
-  UpdateListener,
-  ViewportConfig,
-  ViewportMutation,
-  ViewportState,
-} from '../types';
+import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { TypedEventBus } from '../core/TypedEventBus';
+import type { InteractionTarget } from '../interaction/InteractionTarget';
+import type { EasingFunction, ViewportConfig, ViewportMutation, ViewportState } from '../types';
 
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
   minZoom: 0.1,
@@ -40,21 +37,21 @@ function clampPan(pan: number, zoom: number): number {
   return Math.max(-maxPan, Math.min(maxPan, pan));
 }
 
-export class ViewportController {
+export class ViewportController implements InteractionTarget {
   private state: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private target: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private animationId: number | null = null;
   private config: Required<ViewportConfig>;
-  private mutationListeners = new Set<MutationListener>();
-  private updateListeners = new Set<UpdateListener>();
-  private transitionEndListeners = new Set<TransitionEndListener>();
 
   // Animation state for time-based transitions
   private animationStartState: ViewportState | null = null;
   private animationStartTime: number | null = null;
   private animationDuration = 0;
 
-  constructor(config: Partial<ViewportConfig> = {}) {
+  constructor(
+    config: Partial<ViewportConfig> = {},
+    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+  ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
@@ -73,7 +70,7 @@ export class ViewportController {
   }
 
   /**
-   * Notify all mutation listeners about a viewport change intention.
+   * Emit mutation event via EventBus
    * Called before animation starts, with the target state.
    */
   private emitMutation(
@@ -81,29 +78,23 @@ export class ViewportController {
     prev: ViewportState,
     nextTarget: ViewportState
   ): void {
-    for (const listener of this.mutationListeners) {
-      listener(mutation, prev, nextTarget);
-    }
+    this.eventBus?.emit('viewport:mutation', { mutation, prev, target: nextTarget });
   }
 
   /**
-   * Notify all update listeners about current viewport state.
+   * Emit update event via EventBus
    * Called on every animation frame and when state changes instantly.
    */
   private emitUpdate(state: ViewportState): void {
-    for (const listener of this.updateListeners) {
-      listener(state);
-    }
+    this.eventBus?.emit('viewport:update', { state });
   }
 
   /**
-   * Notify all transition end listeners when an animation completes.
-   * Not called for instant transitions (duration: 0).
+   * Emit transition end event via EventBus
+   * Called when an animation completes (not for instant transitions).
    */
   private emitTransitionEnd(state: ViewportState): void {
-    for (const listener of this.transitionEndListeners) {
-      listener(state);
-    }
+    this.eventBus?.emit('viewport:transitionEnd', { state });
   }
 
   /**
@@ -139,48 +130,6 @@ export class ViewportController {
       default:
         return { ...this.getTarget() };
     }
-  }
-
-  /**
-   * Subscribe to mutation events.
-   * Mutations fire once when a viewport change is requested, before animation.
-   * Useful for UI updates that should reflect the target state immediately.
-   * @returns Unsubscribe function
-   */
-  onMutation(listener: MutationListener): () => void {
-    this.mutationListeners.add(listener);
-
-    return () => {
-      this.mutationListeners.delete(listener);
-    };
-  }
-
-  /**
-   * Subscribe to state update events.
-   * Updates fire on every animation frame during transitions.
-   * Useful for rendering that needs smooth interpolated values.
-   * @returns Unsubscribe function
-   */
-  onUpdate(listener: UpdateListener): () => void {
-    this.updateListeners.add(listener);
-
-    return () => {
-      this.updateListeners.delete(listener);
-    };
-  }
-
-  /**
-   * Subscribe to transition end events.
-   * Fires when an animated transition completes (not called for instant transitions).
-   * Useful for UI updates that should happen after animation finishes.
-   * @returns Unsubscribe function
-   */
-  onTransitionEnd(listener: TransitionEndListener): () => void {
-    this.transitionEndListeners.add(listener);
-
-    return () => {
-      this.transitionEndListeners.delete(listener);
-    };
   }
 
   /**
@@ -356,8 +305,5 @@ export class ViewportController {
    */
   destroy(): void {
     this.stopAnimation();
-    this.mutationListeners.clear();
-    this.updateListeners.clear();
-    this.transitionEndListeners.clear();
   }
 }

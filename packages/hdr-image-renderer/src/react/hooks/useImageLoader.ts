@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { HDRCanvas } from '../../HDRCanvas';
-import type { ImageData, ImageInfo, ImageLoader, LoadingState } from '../../types';
+import type { IHDRCanvas, ImageData, ImageInfo, ImageLoader, LoadingState } from '../../types';
 
 export interface UseImageLoaderOptions {
   /** Image data to load directly (mutually exclusive with loader) */
@@ -38,7 +37,7 @@ const IDLE_STATE: LoadingState = { status: 'idle', displayedImage: 'none' };
  * Supports both direct ImageData and async loader function.
  */
 export function useImageLoader(
-  instanceRef: React.RefObject<HDRCanvas | null>,
+  instanceRef: React.RefObject<IHDRCanvas | null>,
   options: UseImageLoaderOptions
 ): UseImageLoaderResult {
   const {
@@ -90,14 +89,14 @@ export function useImageLoader(
 
   // Load direct ImageData
   useEffect(() => {
-    if (!image || !instanceRef.current) return;
+    if (!image) return;
 
-    const instance = instanceRef.current;
-
-    instance
-      .loadImage(image)
+    instanceRef.current?.loading
+      .upload(image)
       .then(() => {
-        const info = instance.control.getImageInfo();
+        console.log(instanceRef.current);
+        if (!instanceRef.current) return;
+        const info = instanceRef.current?.control.getImageInfo();
         onLoadRef.current?.(info);
       })
       .catch((err) => {
@@ -110,13 +109,14 @@ export function useImageLoader(
     const currentLoader = loaderRef.current;
     if (!currentLoader || !instanceRef.current) return;
 
-    const instance = instanceRef.current;
-
     // Subscribe to state changes from ImageLoadingManager
-    const unsubscribe = instance.loading.onStateChange(setState);
+    // const unsubscribe = instanceRef.current?.loading.onStateChange(setState);
+    const unsubscribe = instanceRef.current?.on('loading:stateChange', ({ state }) =>
+      setState(state)
+    );
 
     // Start loading
-    instance.loading
+    instanceRef.current?.loading
       .load(currentLoader, { placeholder, errorFallback, timeout })
       .then((info) => {
         onLoadRef.current?.(info);
@@ -130,7 +130,7 @@ export function useImageLoader(
 
     return () => {
       unsubscribe();
-      instance.loading.cancel();
+      instanceRef.current?.loading.cancel();
     };
   }, [instanceRef, placeholder, errorFallback, timeout]);
   // Note: loader is accessed via ref, not in deps

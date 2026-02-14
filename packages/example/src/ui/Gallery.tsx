@@ -6,7 +6,7 @@
 
 import type { ImageLoader, LoadingState } from '@dimkatet/hdr-image-renderer';
 import { HDRImage } from '@dimkatet/hdr-image-renderer/react';
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 interface GalleryImage {
   id: string;
@@ -71,9 +71,7 @@ export function Gallery({ images, onClose }: GalleryProps) {
             Loaded: {loadedCount}/{images.length}
           </span>
           {loadingCount > 0 && (
-            <span style={{ marginLeft: '16px', color: '#66aaff' }}>
-              Loading: {loadingCount}
-            </span>
+            <span style={{ marginLeft: '16px', color: '#66aaff' }}>Loading: {loadingCount}</span>
           )}
           {Object.keys(errors).length > 0 && (
             <span style={{ marginLeft: '16px', color: '#ff6666' }}>
