@@ -5,7 +5,7 @@
  * Coordinates loading state and delegates actual image upload to HDRCanvas.
  */
 
-import type { HDRCanvasEventMap } from './core/EventTypes';
+import type { DomainEventMap } from './core/EventTypes';
 import type { RuntimeContext, RuntimeService } from './core/RuntimeService';
 import type { TypedEventBus } from './core/TypedEventBus';
 import type { ImageUploadService } from './ImageUploadService';
@@ -28,7 +28,7 @@ export class ImageLoadingManager implements LoadingAPI, RuntimeService {
 
   constructor(
     private uploadService: ImageUploadService,
-    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+    private eventBus?: TypedEventBus<DomainEventMap>
   ) {}
 
   // ============================================================
@@ -164,13 +164,6 @@ export class ImageLoadingManager implements LoadingAPI, RuntimeService {
    */
   getState(): LoadingState {
     return { ...this.state };
-  }
-
-  /**
-   * Cleanup resources
-   */
-  destroy(): void {
-    this.cancel();
   }
 
   /**

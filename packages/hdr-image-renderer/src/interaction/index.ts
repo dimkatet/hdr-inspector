@@ -2,7 +2,7 @@
  * Interaction module - Event handlers and manager
  */
 
-export type { InteractionTarget } from './InteractionTarget';
+export type { ViewportFacade } from './ViewportFacade';
 export { KeyboardHandler } from './KeyboardHandler';
 export { InteractionManager } from './Manager';
 export { MouseHandler } from './MouseHandler';

@@ -3,7 +3,7 @@
  */
 
 import type { ImageUploadService } from '../ImageUploadService';
-import type { InteractionTarget } from '../interaction/InteractionTarget';
+import type { ViewportFacade } from '../interaction/ViewportFacade';
 import type { Logger } from '../logger';
 import type { PixelReadbackService } from '../render/PixelReadbackService';
 import type { Renderer } from '../render/Renderer';
@@ -21,7 +21,7 @@ import type {
 } from '../types';
 import type { ViewportLayoutService } from '../viewport/LayoutService';
 import type { ViewportCommandService } from '../viewport/ViewportCommandService';
-import type { HDRCanvasEventMap } from './EventTypes';
+import type { DomainEventMap, RuntimeEventMap } from './EventTypes';
 import type { TypedEventBus } from './TypedEventBus';
 
 /**
@@ -46,13 +46,6 @@ export interface CoreConfig {
 export type ServiceFactory<T> = () => T;
 
 /**
- * Service with optional destroy method
- */
-export interface DestroyableService {
-  destroy?: () => void;
-}
-
-/**
  * Command handlers for zoom operations
  */
 export interface ZoomCommands {
@@ -67,11 +60,12 @@ export interface ZoomCommands {
  * Maps service names to their interface types.
  */
 export interface ServiceMap {
-  eventBus: TypedEventBus<HDRCanvasEventMap>;
+  eventBus: TypedEventBus<DomainEventMap>;
+  runtimeEventBus: TypedEventBus<RuntimeEventMap>;
   logger: Logger;
   renderer: Renderer;
   settings: RenderAPI;
-  viewport: InteractionTarget;
+  viewport: ViewportFacade;
   layoutService: ViewportLayoutService;
   commands: ViewportCommandService;
   interactions: InteractionAPI;

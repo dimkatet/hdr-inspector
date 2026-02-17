@@ -1,5 +1,5 @@
 /**
- * InteractionTarget - Interface for interaction-capable objects
+ * ViewportFacade - Interface for viewport-controllable objects
  *
  * Decouples interaction handlers from specific viewport implementations.
  * Any object implementing this interface can be controlled via mouse, touch, or keyboard.
@@ -15,13 +15,13 @@ import type { ViewportConfig, ViewportMutation, ViewportState } from '../types';
  *
  * @example
  * ```typescript
- * // ViewportController implements InteractionTarget
+ * // ViewportController implements ViewportFacade
  * const viewport = new ViewportController();
  * const interactions = new InteractionManager(canvas, viewport, getCommands);
  * interactions.attach({ wheel: true, drag: true });
  * ```
  */
-export interface InteractionTarget {
+export interface ViewportFacade {
   /**
    * Apply a viewport mutation (zoom, pan, or reset)
    * @param mutation - The mutation to apply with animation parameters

@@ -43,5 +43,5 @@ export interface Renderer {
   readPixels(options: RenderOptions): Promise<PixelReadback>;
 
   /** Cleanup rendering resources */
-  destroy(): void;
+  dispose(): void;
 }

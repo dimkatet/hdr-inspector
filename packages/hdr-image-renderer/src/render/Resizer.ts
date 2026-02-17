@@ -5,7 +5,7 @@
  * with CSS display size, accounting for device pixel ratio.
  */
 
-import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { DomainEventMap } from '../core/EventTypes';
 import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { TypedEventBus } from '../core/TypedEventBus';
 import type { ResizeService } from './ResizeService';
@@ -18,7 +18,7 @@ export class CanvasResizer implements ResizeService, RuntimeService {
   constructor(
     canvas: HTMLCanvasElement,
     onResize: () => void,
-    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+    private eventBus?: TypedEventBus<DomainEventMap>
   ) {
     this.canvas = canvas;
     this.onResize = onResize;

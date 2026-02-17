@@ -24,7 +24,7 @@ export type RuntimeState = 'idle' | 'initializing' | 'running' | 'stopping' | 's
  * Immutable after creation.
  */
 export interface RuntimeContext {
-  readonly eventBus: TypedEventBus<import('./EventTypes').HDRCanvasEventMap>;
+  readonly eventBus: TypedEventBus<import('./EventTypes').DomainEventMap>;
   readonly signal: AbortSignal;
   readonly logger: Logger;
   readonly config: CoreConfig;

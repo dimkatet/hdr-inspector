@@ -2,10 +2,10 @@
  * HDRCanvas - Main API (Facade)
  *
  * High-level interface for rendering HDR images with WebGPU.
- * Delegates lifecycle to CanvasRuntime and service access to CanvasCore.
+ * Delegates lifecycle to CanvasRuntime and service access to ServiceRegistry.
  *
  * Architecture:
- *   HDRCanvas (Facade) → CanvasRuntime (Lifecycle) → CanvasCore (DI) → Services
+ *   HDRCanvas (Facade) → CanvasRuntime (Orchestration) → ServiceRegistry (DI) → Services
  */
 
 import { CanvasRuntime } from './core/CanvasRuntime';
@@ -67,50 +67,50 @@ export class HDRCanvas implements IHDRCanvas {
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
     this.runtime = new CanvasRuntime(canvas, options);
-    const core = this.runtime.core;
+    const registry =this.runtime.registry;
 
     // Initialize API namespaces AFTER runtime is created
     // This ensures arrow functions capture the correct core instance during HMR
     this.viewport = {
       // State
-      getState: () => core.get('viewport').getState(),
-      setConfig: (config) => core.get('viewport').updateConfig(config),
+      getState: () => registry.get('viewport').getState(),
+      setConfig: (config) => registry.get('viewport').updateConfig(config),
 
       // Commands (instant)
-      setZoom: (zoom) => core.get('commands').setZoom(zoom),
-      setPan: (x, y) => core.get('commands').setPan(x, y),
-      setViewport: (viewport) => core.get('commands').setViewport(viewport),
+      setZoom: (zoom) => registry.get('commands').setZoom(zoom),
+      setPan: (x, y) => registry.get('commands').setPan(x, y),
+      setViewport: (viewport) => registry.get('commands').setViewport(viewport),
 
       // Commands (animated)
-      zoomIn: (factor) => core.get('commands').zoomIn(factor),
-      zoomOut: (factor) => core.get('commands').zoomOut(factor),
-      zoomToFit: () => core.get('commands').zoomToFit(),
-      zoomToActual: () => core.get('commands').zoomToActual(),
-      reset: (animated) => core.get('commands').reset(animated),
+      zoomIn: (factor) => registry.get('commands').zoomIn(factor),
+      zoomOut: (factor) => registry.get('commands').zoomOut(factor),
+      zoomToFit: () => registry.get('commands').zoomToFit(),
+      zoomToActual: () => registry.get('commands').zoomToActual(),
+      reset: (animated) => registry.get('commands').reset(animated),
     };
 
     this.render = {
-      getState: () => core.get('settings').getState(),
-      setExposure: (ev) => core.get('settings').setExposure(ev),
-      setToneMapping: (operator) => core.get('settings').setToneMapping(operator),
-      setHDRMode: (enabled) => core.get('settings').setHDRMode(enabled),
-      setColorSpace: (space) => core.get('settings').setColorSpace(space),
-      setVisualizationMode: (mode) => core.get('settings').setVisualizationMode(mode),
-      setObjectFit: (mode) => core.get('settings').setObjectFit(mode),
-      updateOptions: (options) => core.get('settings').updateOptions(options),
+      getState: () => registry.get('settings').getState(),
+      setExposure: (ev) => registry.get('settings').setExposure(ev),
+      setToneMapping: (operator) => registry.get('settings').setToneMapping(operator),
+      setHDRMode: (enabled) => registry.get('settings').setHDRMode(enabled),
+      setColorSpace: (space) => registry.get('settings').setColorSpace(space),
+      setVisualizationMode: (mode) => registry.get('settings').setVisualizationMode(mode),
+      setObjectFit: (mode) => registry.get('settings').setObjectFit(mode),
+      updateOptions: (options) => registry.get('settings').updateOptions(options),
     };
 
     this.interaction = {
-      attach: (options) => core.get('interactions').attach(options),
-      detach: () => core.get('interactions').detach(),
+      attach: (options) => registry.get('interactions').attach(options),
+      detach: () => registry.get('interactions').detach(),
     };
 
     this.control = {
-      enableAutoResize: () => core.get('resizer').enable(),
-      disableAutoResize: () => core.get('resizer').disable(),
-      getImageDimensions: () => core.get('renderer').getImageDimensions(),
+      enableAutoResize: () => registry.get('resizer').enable(),
+      disableAutoResize: () => registry.get('resizer').disable(),
+      getImageDimensions: () => registry.get('renderer').getImageDimensions(),
       getImageInfo: () => {
-        const dims = core.get('renderer').getImageDimensions();
+        const dims = registry.get('renderer').getImageDimensions();
         return {
           width: dims.width,
           height: dims.height,
@@ -121,14 +121,14 @@ export class HDRCanvas implements IHDRCanvas {
     };
 
     this.export = {
-      toBlob: (options) => core.get('export').toBlob(options),
+      toBlob: (options) => registry.get('export').toBlob(options),
     };
 
     this.loading = {
-      upload: (data) => core.get('loading').upload(data),
-      load: (loader, options) => core.get('loading').load(loader, options),
-      cancel: () => core.get('loading').cancel(),
-      getState: () => core.get('loading').getState(),
+      upload: (data) => registry.get('loading').upload(data),
+      load: (loader, options) => registry.get('loading').load(loader, options),
+      cancel: () => registry.get('loading').cancel(),
+      getState: () => registry.get('loading').getState(),
     };
   }
 

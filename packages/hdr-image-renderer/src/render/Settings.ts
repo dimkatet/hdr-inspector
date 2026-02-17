@@ -5,7 +5,7 @@
  * with change notification for re-rendering.
  */
 
-import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { DomainEventMap } from '../core/EventTypes';
 import type { TypedEventBus } from '../core/TypedEventBus';
 import type {
   ColorSpace,
@@ -29,7 +29,7 @@ export class RenderSettings implements RenderAPI {
   constructor(
     options: HDRCanvasOptions,
     onChange: () => void,
-    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+    private eventBus?: TypedEventBus<DomainEventMap>
   ) {
     this.exposure = options.exposure ?? 0;
     this.toneMapping = options.toneMapping ?? 'aces';

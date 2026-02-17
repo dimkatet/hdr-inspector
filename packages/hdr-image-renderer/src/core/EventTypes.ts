@@ -2,7 +2,7 @@
  * HDRCanvas Event Types
  *
  * Defines all events emitted by HDRCanvas subsystems.
- * Used for type-safe event subscriptions via TypedEventBus.
+ * Split into Domain (application) and Runtime (infrastructure) events.
  */
 
 import type {
@@ -15,11 +15,10 @@ import type {
 import type { RuntimeState } from './RuntimeService';
 
 /**
- * HDRCanvas Event Map
- *
- * Maps event names to their data payloads for type-safe subscriptions.
+ * Domain events — emitted by application services
+ * (viewport, loading, render, canvas)
  */
-export interface HDRCanvasEventMap {
+export interface DomainEventMap {
   // Viewport events
   'viewport:mutation': {
     mutation: ViewportMutation;
@@ -50,13 +49,22 @@ export interface HDRCanvasEventMap {
     width: number;
     height: number;
   };
+}
 
-  // Runtime lifecycle events
+/**
+ * Runtime events — emitted by lifecycle infrastructure
+ */
+export interface RuntimeEventMap {
   'runtime:stateChange': {
     state: RuntimeState;
     previousState: RuntimeState;
   };
 }
+
+/**
+ * Combined event map — used at facade level for unified subscriptions
+ */
+export interface HDRCanvasEventMap extends DomainEventMap, RuntimeEventMap {}
 
 /**
  * Type-safe event listener

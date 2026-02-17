@@ -4,14 +4,14 @@
  * Creates and manages MouseHandler, TouchHandler, and KeyboardHandler instances.
  * Wires up callbacks from handlers to viewport mutations and commands.
  *
- * Uses InteractionTarget interface to decouple from specific viewport implementations.
+ * Uses ViewportFacade interface to decouple from specific viewport implementations.
  */
 
 import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
-import type { InteractionTarget } from './InteractionTarget';
+import type { ViewportFacade } from './ViewportFacade';
 import { KeyboardHandler } from './KeyboardHandler';
 import { MouseHandler } from './MouseHandler';
 import { TouchHandler } from './TouchHandler';
@@ -25,14 +25,14 @@ interface ZoomCommands {
 
 export class InteractionManager implements InteractionAPI, RuntimeService {
   private canvas: HTMLCanvasElement;
-  private target: InteractionTarget;
+  private target: ViewportFacade;
   private getZoomCommands: () => ZoomCommands;
   private cleanupFunctions: Array<() => void> = [];
   private logger: Logger;
 
   constructor(
     canvas: HTMLCanvasElement,
-    target: InteractionTarget,
+    target: ViewportFacade,
     getZoomCommands: () => ZoomCommands,
     logger: Logger = silentLogger
   ) {

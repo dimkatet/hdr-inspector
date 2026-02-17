@@ -2,8 +2,8 @@
  * Core coordination layer exports
  */
 
-export { CanvasCore } from './CanvasCore';
 export { CanvasRuntime } from './CanvasRuntime';
-export { EventBus } from './EventBus';
+export { ServiceRegistry, CanvasCore } from './CanvasCore';
+export { RuntimeKernel } from './RuntimeKernel';
 export type { RuntimeContext, RuntimeService, RuntimeState } from './RuntimeService';
 export type { CoreConfig, ZoomCommands } from './types';

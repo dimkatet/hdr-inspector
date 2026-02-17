@@ -2,16 +2,16 @@
  * CanvasRuntime - Lifecycle orchestration layer
  *
  * Single point of control for:
- * - Service initialization order
- * - Start / stop lifecycle
- * - Centralized AbortController
+ * - Service bootstrap and registration
+ * - Start / stop lifecycle (delegated to RuntimeKernel)
  * - Error boundary (rollback on init failure)
  * - Render coordination
  *
  * Architecture:
  *   HDRCanvas (Facade)
- *     → CanvasRuntime (Lifecycle / Orchestration)
- *       → CanvasCore (DI / Registry)
+ *     → CanvasRuntime (Orchestration)
+ *       → RuntimeKernel (State machine + AbortSignal)
+ *       → ServiceRegistry (DI container + managed tracking)
  *         → Services
  */
 
@@ -25,22 +25,19 @@ import { WebGPUReadbackService } from '../render/WebGPUReadbackService';
 import type { HDRCanvasOptions } from '../types';
 import { ViewportCommands, ViewportController, ViewportLayoutService } from '../viewport';
 import { WebGPUUploadService } from '../WebGPUUploadService';
-import { CanvasCore } from './CanvasCore';
-import type { HDRCanvasEventMap } from './EventTypes';
-import type { RuntimeContext, RuntimeService, RuntimeState } from './RuntimeService';
+import { ServiceRegistry } from './CanvasCore';
+import type { DomainEventMap, HDRCanvasEventMap, RuntimeEventMap } from './EventTypes';
+import { RuntimeKernel } from './RuntimeKernel';
+import type { RuntimeContext, RuntimeService } from './RuntimeService';
 import { TypedEventBus } from './TypedEventBus';
 import { type CoreConfig, normalizeConfig } from './types';
 
 export class CanvasRuntime {
-  private _state: RuntimeState = 'idle';
-  private managedServices: Array<{ name: string; service: RuntimeService }> = [];
-  /** Keys of managed services in bootstrap order — used to force lazy instantiation before init */
-  private managedServiceKeys: Array<keyof import('./types').ServiceMap> = [];
-  private abortController = new AbortController();
+  private kernel = new RuntimeKernel();
   private config: CoreConfig;
   private logger: Logger;
 
-  readonly core: CanvasCore;
+  readonly registry: ServiceRegistry;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -48,15 +45,15 @@ export class CanvasRuntime {
   ) {
     this.config = normalizeConfig(options);
     this.logger = createLogger(this.config.debug);
-    this.core = new CanvasCore();
+    this.registry = new ServiceRegistry();
     this.bootstrap();
   }
 
   /**
    * Current runtime state
    */
-  get state(): RuntimeState {
-    return this._state;
+  get state() {
+    return this.kernel.state;
   }
 
   /**
@@ -66,40 +63,34 @@ export class CanvasRuntime {
    * On error: rollback initialized services → error
    */
   async start(): Promise<void> {
-    if (this._state !== 'idle' && this._state !== 'stopped') {
-      return;
-    }
+    if (!this.kernel.prepareStart()) return;
 
-    this.transitionTo('initializing');
-
-    // Create fresh abort controller for this lifecycle
-    this.abortController = new AbortController();
-
-    // Force lazy instantiation of managed services (factories populate managedServices array)
-    for (const key of this.managedServiceKeys) {
-      this.core.get(key);
+    // Force lazy instantiation of managed services (factories populate managedInstances)
+    for (const key of this.registry.getManagedKeys()) {
+      this.registry.get(key);
     }
 
     const ctx = this.createContext();
+    const instances = this.registry.getManagedInstances();
     const initialized: RuntimeService[] = [];
 
     try {
-      for (const { name, service } of this.managedServices) {
+      for (const { name, service } of instances) {
         this.logger.log(`[CanvasRuntime] Initializing ${name}`);
         await service.init(ctx);
         initialized.push(service);
       }
 
-      for (const { name, service } of this.managedServices) {
+      for (const { name, service } of instances) {
         this.logger.log(`[CanvasRuntime] Starting ${name}`);
         service.start();
       }
 
-      this.transitionTo('running');
+      this.kernel.markRunning();
     } catch (error) {
       this.logger.warn('[CanvasRuntime] Init failed, rolling back:', error);
       this.rollback(initialized);
-      this.transitionTo('error');
+      this.kernel.markError();
       throw error;
     }
   }
@@ -110,18 +101,12 @@ export class CanvasRuntime {
    * Flow: running → stopping → stopped
    */
   async stop(): Promise<void> {
-    if (this._state === 'stopped' || this._state === 'idle') {
-      return;
-    }
-
-    this.transitionTo('stopping');
-
-    // Abort any async operations
-    this.abortController.abort();
+    if (!this.kernel.prepareStop()) return;
 
     // Stop and dispose in reverse order
-    for (let i = this.managedServices.length - 1; i >= 0; i--) {
-      const { name, service } = this.managedServices[i];
+    const instances = this.registry.getManagedInstances();
+    for (let i = instances.length - 1; i >= 0; i--) {
+      const { name, service } = instances[i];
       try {
         this.logger.log(`[CanvasRuntime] Stopping ${name}`);
         service.stop();
@@ -132,9 +117,9 @@ export class CanvasRuntime {
     }
 
     // Clear DI registry
-    this.core.clear();
+    this.registry.clear();
 
-    this.transitionTo('stopped');
+    this.kernel.markStopped();
   }
 
   /**
@@ -151,25 +136,31 @@ export class CanvasRuntime {
    * Request a render (coordinates settings + viewport + renderer)
    */
   requestRender(): void {
-    if (this._state !== 'running') return;
+    if (this.kernel.state !== 'running') return;
 
-    const renderer = this.core.get('renderer');
-    const settings = this.core.get('settings');
-    const viewport = this.core.get('viewport');
+    const renderer = this.registry.get('renderer');
+    const settings = this.registry.get('settings');
+    const viewport = this.registry.get('viewport');
 
     renderer.render({
       ...settings.getState(),
       viewport: viewport.getState(),
     });
 
-    this.core.get('eventBus').emit('render:complete', {});
+    this.registry.get('eventBus').emit('render:complete', {});
   }
 
+  private compositeEventBus: TypedEventBus<HDRCanvasEventMap> | null = null;
+
   /**
-   * Get EventBus for event subscriptions
+   * Get composite EventBus for unified event subscriptions.
+   * Routes domain events to domainBus, runtime events to runtimeBus.
    */
   getEventBus(): TypedEventBus<HDRCanvasEventMap> {
-    return this.core.get('eventBus');
+    if (!this.compositeEventBus) {
+      this.compositeEventBus = this.createCompositeEventBus();
+    }
+    return this.compositeEventBus;
   }
 
   // ============================================================
@@ -177,30 +168,34 @@ export class CanvasRuntime {
   // ============================================================
 
   /**
-   * Register all services in CanvasCore and track managed ones
+   * Register all services in ServiceRegistry and track managed ones
    */
   private bootstrap(): void {
-    this.managedServices = [];
-    this.managedServiceKeys = [];
-
     // Infrastructure (pure services — no RuntimeService)
-    this.core.register('eventBus', () => new TypedEventBus<HDRCanvasEventMap>());
-    this.core.register('logger', () => this.logger);
+    this.registry.register('eventBus', () => new TypedEventBus<DomainEventMap>());
+    this.registry.register('runtimeEventBus', () => {
+      const bus = new TypedEventBus<RuntimeEventMap>();
+      this.kernel.setEventBus(bus);
+      return bus;
+    });
+    this.registry.register('logger', () => this.logger);
+
+    // Reset composite event bus (will be recreated on next getEventBus() call)
+    this.compositeEventBus = null;
 
     // Renderer (managed)
-    this.core.register('renderer', () => {
+    this.registry.registerManaged('renderer', () => {
       setGPUDeviceLogger(this.logger);
       const renderer = new WebGPURenderer(this.canvas, {
         transparent: this.config.transparent,
         logger: this.logger,
       });
-      this.registerManaged('renderer', renderer);
+      this.registry.trackManagedInstance('renderer', renderer);
       return renderer;
     });
-    this.managedServiceKeys.push('renderer');
 
     // Settings (pure)
-    this.core.register('settings', () => {
+    this.registry.register('settings', () => {
       return new RenderSettings(
         {
           exposure: this.config.renderOptions.exposure,
@@ -212,78 +207,75 @@ export class CanvasRuntime {
           debug: this.config.debug,
         },
         () => this.requestRender(),
-        this.core.get('eventBus')
+        this.registry.get('eventBus')
       );
     });
 
     // Viewport (managed)
-    this.core.register('viewport', () => {
-      const eventBus = this.core.get('eventBus');
+    this.registry.registerManaged('viewport', () => {
+      const eventBus = this.registry.get('eventBus');
       const controller = new ViewportController({}, eventBus, this.logger);
 
       // Subscribe to viewport updates for re-rendering
       eventBus.on('viewport:update', () => this.requestRender());
 
-      this.registerManaged('viewport', controller);
+      this.registry.trackManagedInstance('viewport', controller);
       return controller;
     });
-    this.managedServiceKeys.push('viewport');
 
     // Layout (pure)
-    this.core.register('layoutService', () => new ViewportLayoutService());
+    this.registry.register('layoutService', () => new ViewportLayoutService());
 
     // Commands (pure)
-    this.core.register('commands', () => {
+    this.registry.register('commands', () => {
       return new ViewportCommands(
-        this.core.get('viewport'),
-        () => this.core.get('renderer').getImageDimensions(),
+        this.registry.get('viewport'),
+        () => this.registry.get('renderer').getImageDimensions(),
         () => this.getCanvasSize(),
-        () => this.core.get('settings').getState().objectFit,
-        this.core.get('layoutService'),
+        () => this.registry.get('settings').getState().objectFit,
+        this.registry.get('layoutService'),
         this.logger
       );
     });
 
     // Interactions (managed)
-    this.core.register('interactions', () => {
+    this.registry.registerManaged('interactions', () => {
       const manager = new InteractionManager(
         this.canvas,
-        this.core.get('viewport'),
+        this.registry.get('viewport'),
         () => this.getZoomCommands(),
         this.logger
       );
-      this.registerManaged('interactions', manager);
+      this.registry.trackManagedInstance('interactions', manager);
       return manager;
     });
-    this.managedServiceKeys.push('interactions');
 
     // Resizer (managed)
-    this.core.register('resizer', () => {
+    this.registry.registerManaged('resizer', () => {
       const resizer = new CanvasResizer(
         this.canvas,
         () => this.requestRender(),
-        this.core.get('eventBus')
+        this.registry.get('eventBus')
       );
-      this.registerManaged('resizer', resizer);
+      this.registry.trackManagedInstance('resizer', resizer);
       return resizer;
     });
-    this.managedServiceKeys.push('resizer');
 
     // Upload (pure — wraps renderer)
-    this.core.register('uploadService', () => {
-      return new WebGPUUploadService(this.core.get('renderer'));
+    this.registry.register('uploadService', () => {
+      return new WebGPUUploadService(this.registry.get('renderer'));
     });
 
     // Readback (pure — wraps renderer)
-    this.core.register('readbackService', () => {
-      return new WebGPUReadbackService(this.core.get('renderer'));
+    this.registry.register('readbackService', () => {
+      return new WebGPUReadbackService(this.registry.get('renderer'));
     });
 
     // Loading (managed)
-    this.core.register('loading', () => {
-      const eventBus = this.core.get('eventBus');
+    this.registry.registerManaged('loading', () => {
+      const eventBus = this.registry.get('eventBus');
       const manager = new ImageLoadingManager(
-        this.core.get('uploadService'),
+        this.registry.get('uploadService'),
         eventBus
       );
 
@@ -292,24 +284,16 @@ export class CanvasRuntime {
         if (state.status === 'success') this.requestRender();
       });
 
-      this.registerManaged('loading', manager);
+      this.registry.trackManagedInstance('loading', manager);
       return manager;
     });
-    this.managedServiceKeys.push('loading');
 
     // Export (pure)
-    this.core.register('export', () => {
-      return new ExportManager(this.core.get('readbackService'), () =>
-        this.core.get('settings').getState()
+    this.registry.register('export', () => {
+      return new ExportManager(this.registry.get('readbackService'), () =>
+        this.registry.get('settings').getState()
       );
     });
-  }
-
-  /**
-   * Track a service as managed (will receive lifecycle calls)
-   */
-  private registerManaged(name: string, service: RuntimeService): void {
-    this.managedServices.push({ name, service });
   }
 
   /**
@@ -317,31 +301,11 @@ export class CanvasRuntime {
    */
   private createContext(): RuntimeContext {
     return {
-      eventBus: this.core.get('eventBus'),
-      signal: this.abortController.signal,
+      eventBus: this.registry.get('eventBus'),
+      signal: this.kernel.signal,
       logger: this.logger,
       config: this.config,
     };
-  }
-
-  /**
-   * Transition to a new state and emit event
-   */
-  private transitionTo(newState: RuntimeState): void {
-    const previousState = this._state;
-    this._state = newState;
-
-    // Emit event if eventBus is available (may not be during early init)
-    if (this.core.has('eventBus')) {
-      try {
-        this.core.get('eventBus').emit('runtime:stateChange', {
-          state: newState,
-          previousState,
-        });
-      } catch {
-        // EventBus may be cleared during stop — ignore
-      }
-    }
   }
 
   /**
@@ -370,12 +334,70 @@ export class CanvasRuntime {
    * Get zoom command handlers for interaction system
    */
   private getZoomCommands() {
-    const commands = this.core.get('commands');
+    const commands = this.registry.get('commands');
     return {
       zoomIn: (factor?: number) => commands.zoomIn(factor),
       zoomOut: (factor?: number) => commands.zoomOut(factor),
       zoomToFit: () => commands.zoomToFit(),
       zoomToActual: () => commands.zoomToActual(),
     };
+  }
+
+  /**
+   * Create a composite EventBus that routes events to the correct internal bus.
+   * Domain events → domainBus, runtime events → runtimeBus.
+   */
+  private createCompositeEventBus(): TypedEventBus<HDRCanvasEventMap> {
+    const domainBus = this.registry.get('eventBus');
+    const runtimeBus = this.registry.get('runtimeEventBus');
+
+    const isRuntimeEvent = (event: string | number | symbol): boolean =>
+      typeof event === 'string' && event.startsWith('runtime:');
+
+    // Use a real TypedEventBus as the base, then override methods to route
+    const composite = new TypedEventBus<HDRCanvasEventMap>();
+
+    const originalOn = composite.on.bind(composite);
+    composite.on = (<K extends keyof HDRCanvasEventMap>(
+      event: K,
+      callback: (data: HDRCanvasEventMap[K]) => void,
+      options?: import('./TypedEventBus').EventBusOptions
+    ) => {
+      if (isRuntimeEvent(event)) {
+        // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+        return runtimeBus.on(event as any, callback as any, options);
+      }
+      // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+      return domainBus.on(event as any, callback as any, options);
+    }) as typeof originalOn;
+
+    const originalEmit = composite.emit.bind(composite);
+    composite.emit = (<K extends keyof HDRCanvasEventMap>(event: K, data: HDRCanvasEventMap[K]) => {
+      if (isRuntimeEvent(event)) {
+        // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+        runtimeBus.emit(event as any, data as any);
+      } else {
+        // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+        domainBus.emit(event as any, data as any);
+      }
+    }) as typeof originalEmit;
+
+    const originalOff = composite.off.bind(composite);
+    composite.off = (<K extends keyof HDRCanvasEventMap>(event: K) => {
+      if (isRuntimeEvent(event)) {
+        // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+        runtimeBus.off(event as any);
+      } else {
+        // biome-ignore lint/suspicious/noExplicitAny: Bridge between typed buses requires type erasure
+        domainBus.off(event as any);
+      }
+    }) as typeof originalOff;
+
+    composite.clear = () => {
+      domainBus.clear();
+      runtimeBus.clear();
+    };
+
+    return composite;
   }
 }

@@ -4,13 +4,13 @@
  * Handles viewport state management, animation, and input processing.
  * Can be used standalone or integrated into HDRCanvas.
  *
- * Implements InteractionTarget to receive user interactions from handlers.
+ * Implements ViewportFacade to receive user interactions from handlers.
  */
 
-import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { DomainEventMap } from '../core/EventTypes';
 import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { TypedEventBus } from '../core/TypedEventBus';
-import type { InteractionTarget } from '../interaction/InteractionTarget';
+import type { ViewportFacade } from '../interaction/ViewportFacade';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { EasingFunction, ViewportConfig, ViewportMutation, ViewportState } from '../types';
@@ -40,7 +40,7 @@ function clampPan(pan: number, zoom: number): number {
   return Math.max(-maxPan, Math.min(maxPan, pan));
 }
 
-export class ViewportController implements InteractionTarget, RuntimeService {
+export class ViewportController implements ViewportFacade, RuntimeService {
   private state: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private target: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private animationId: number | null = null;
@@ -55,7 +55,7 @@ export class ViewportController implements InteractionTarget, RuntimeService {
 
   constructor(
     config: Partial<ViewportConfig> = {},
-    private eventBus?: TypedEventBus<HDRCanvasEventMap>,
+    private eventBus?: TypedEventBus<DomainEventMap>,
     logger?: Logger
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -338,13 +338,6 @@ export class ViewportController implements InteractionTarget, RuntimeService {
   }
 
   dispose(): void {
-    this.stopAnimation();
-  }
-
-  /**
-   * Cleanup
-   */
-  destroy(): void {
     this.stopAnimation();
   }
 }

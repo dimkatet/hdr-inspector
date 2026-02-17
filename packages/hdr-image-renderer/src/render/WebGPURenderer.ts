@@ -72,7 +72,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
   }
 
   dispose(): void {
-    this.destroy();
+    this.cleanup();
   }
 
   // ============================================================
@@ -393,7 +393,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
    * Cleanup resources
    * Note: Does NOT destroy the shared GPUDevice - only local resources
    */
-  destroy(): void {
+  private cleanup(): void {
     this.logger.log('[WebGPURenderer] Destroying renderer');
 
     if (this.textureManager) {

@@ -2,10 +2,10 @@
  * ViewportCommands - High-level viewport operations
  *
  * Provides user-friendly viewport commands (zoomIn, zoomToFit, etc.)
- * that delegate to InteractionTarget mutations.
+ * that delegate to ViewportFacade mutations.
  */
 
-import type { InteractionTarget } from '../interaction/InteractionTarget';
+import type { ViewportFacade } from '../interaction/ViewportFacade';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { ObjectFit, ViewportState } from '../types';
@@ -13,7 +13,7 @@ import { ViewportLayoutService } from './LayoutService';
 import type { ViewportCommandService } from './ViewportCommandService';
 
 export class ViewportCommands implements ViewportCommandService {
-  private target: InteractionTarget;
+  private target: ViewportFacade;
   private getImageDimensions: () => { width: number; height: number };
   private getCanvasSize: () => { width: number; height: number };
   private getObjectFit: () => ObjectFit;
@@ -21,7 +21,7 @@ export class ViewportCommands implements ViewportCommandService {
   private logger: Logger;
 
   constructor(
-    target: InteractionTarget,
+    target: ViewportFacade,
     getImageDimensions: () => { width: number; height: number },
     getCanvasSize: () => { width: number; height: number },
     getObjectFit: () => ObjectFit,
