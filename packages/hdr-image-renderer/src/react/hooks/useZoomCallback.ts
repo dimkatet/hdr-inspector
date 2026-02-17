@@ -7,7 +7,7 @@ import type { IHDRCanvas, ViewportState } from '../../types';
  * Uses ref pattern to avoid re-subscribing when callback changes.
  */
 export function useZoomCallback(
-  instanceRef: React.RefObject<IHDRCanvas | null>,
+  instance: IHDRCanvas | null,
   onZoom?: (zoom: number, state: ViewportState) => void
 ): void {
   const onZoomRef = useRef(onZoom);
@@ -17,9 +17,9 @@ export function useZoomCallback(
   }, [onZoom]);
 
   useEffect(() => {
-    if (!instanceRef.current || !onZoomRef.current) return;
+    if (!instance || !onZoomRef.current) return;
     const throttledCallback = throttle(100, onZoomRef.current);
-    const unsubscribe = instanceRef.current.on('viewport:mutation', ({ mutation, target }) => {
+    const unsubscribe = instance.on('viewport:mutation', ({ mutation, target }) => {
       const { type, source } = mutation;
       if (type === 'reset') {
         return throttledCallback(target.zoom, target);
@@ -33,5 +33,5 @@ export function useZoomCallback(
     });
 
     return unsubscribe;
-  }, [instanceRef]);
+  }, [instance]);
 }

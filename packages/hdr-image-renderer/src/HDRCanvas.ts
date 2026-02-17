@@ -2,12 +2,13 @@
  * HDRCanvas - Main API (Facade)
  *
  * High-level interface for rendering HDR images with WebGPU.
- * Delegates to CanvasCore for coordination and lifecycle management.
+ * Delegates lifecycle to CanvasRuntime and service access to CanvasCore.
  *
- * All service access uses typed ServiceMap — no concrete class imports needed.
+ * Architecture:
+ *   HDRCanvas (Facade) → CanvasRuntime (Lifecycle) → CanvasCore (DI) → Services
  */
 
-import { CanvasCore } from './core';
+import { CanvasRuntime } from './core/CanvasRuntime';
 import type { HDRCanvasEventMap } from './core/EventTypes';
 import type { EventBusOptions } from './core/TypedEventBus';
 import type {
@@ -22,7 +23,7 @@ import type {
 } from './types';
 
 export class HDRCanvas implements IHDRCanvas {
-  private core: CanvasCore;
+  private runtime: CanvasRuntime;
 
   // ============================================================
   // Namespaced API
@@ -65,75 +66,69 @@ export class HDRCanvas implements IHDRCanvas {
   readonly loading: LoadingAPI;
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
-    this.core = new CanvasCore(canvas, options);
+    this.runtime = new CanvasRuntime(canvas, options);
+    const core = this.runtime.core;
 
-    // Initialize API namespaces AFTER core is created
+    // Initialize API namespaces AFTER runtime is created
     // This ensures arrow functions capture the correct core instance during HMR
     this.viewport = {
       // State
-      getState: () => this.core.get('viewport').getState(),
-      setConfig: (config) => this.core.get('viewport').updateConfig(config),
+      getState: () => core.get('viewport').getState(),
+      setConfig: (config) => core.get('viewport').updateConfig(config),
 
       // Commands (instant)
-      setZoom: (zoom) => this.core.get('commands').setZoom(zoom),
-      setPan: (x, y) => this.core.get('commands').setPan(x, y),
-      setViewport: (viewport) => this.core.get('commands').setViewport(viewport),
+      setZoom: (zoom) => core.get('commands').setZoom(zoom),
+      setPan: (x, y) => core.get('commands').setPan(x, y),
+      setViewport: (viewport) => core.get('commands').setViewport(viewport),
 
       // Commands (animated)
-      zoomIn: (factor) => this.core.get('commands').zoomIn(factor),
-      zoomOut: (factor) => this.core.get('commands').zoomOut(factor),
-      zoomToFit: () => this.core.get('commands').zoomToFit(),
-      zoomToActual: () => this.core.get('commands').zoomToActual(),
-      reset: (animated) => this.core.get('commands').reset(animated),
+      zoomIn: (factor) => core.get('commands').zoomIn(factor),
+      zoomOut: (factor) => core.get('commands').zoomOut(factor),
+      zoomToFit: () => core.get('commands').zoomToFit(),
+      zoomToActual: () => core.get('commands').zoomToActual(),
+      reset: (animated) => core.get('commands').reset(animated),
     };
 
     this.render = {
-      getState: () => this.core.get('settings').getState(),
-      setExposure: (ev) => this.core.get('settings').setExposure(ev),
-      setToneMapping: (operator) => this.core.get('settings').setToneMapping(operator),
-      setHDRMode: (enabled) => this.core.get('settings').setHDRMode(enabled),
-      setColorSpace: (space) => this.core.get('settings').setColorSpace(space),
-      setVisualizationMode: (mode) => this.core.get('settings').setVisualizationMode(mode),
-      setObjectFit: (mode) => this.core.get('settings').setObjectFit(mode),
-      updateOptions: (options) => this.core.get('settings').updateOptions(options),
+      getState: () => core.get('settings').getState(),
+      setExposure: (ev) => core.get('settings').setExposure(ev),
+      setToneMapping: (operator) => core.get('settings').setToneMapping(operator),
+      setHDRMode: (enabled) => core.get('settings').setHDRMode(enabled),
+      setColorSpace: (space) => core.get('settings').setColorSpace(space),
+      setVisualizationMode: (mode) => core.get('settings').setVisualizationMode(mode),
+      setObjectFit: (mode) => core.get('settings').setObjectFit(mode),
+      updateOptions: (options) => core.get('settings').updateOptions(options),
     };
 
     this.interaction = {
-      attach: (options) => this.core.get('interactions').attach(options),
-      detach: () => this.core.get('interactions').detach(),
+      attach: (options) => core.get('interactions').attach(options),
+      detach: () => core.get('interactions').detach(),
     };
 
     this.control = {
-      enableAutoResize: () => this.core.get('resizer').enable(),
-      disableAutoResize: () => this.core.get('resizer').disable(),
-      getImageDimensions: () => this.core.get('renderer').getImageDimensions(),
+      enableAutoResize: () => core.get('resizer').enable(),
+      disableAutoResize: () => core.get('resizer').disable(),
+      getImageDimensions: () => core.get('renderer').getImageDimensions(),
       getImageInfo: () => {
-        const dims = this.core.get('renderer').getImageDimensions();
+        const dims = core.get('renderer').getImageDimensions();
         return {
           width: dims.width,
           height: dims.height,
           aspectRatio: dims.width / dims.height,
         };
       },
-      forceRender: () => {
-        if (this.core.lifecycle === 'ready') {
-          this.core.get('renderer').render({
-            ...this.core.get('settings').getState(),
-            viewport: this.core.get('viewport').getState(),
-          });
-        }
-      },
+      forceRender: () => this.runtime.requestRender(),
     };
 
     this.export = {
-      toBlob: (options) => this.core.get('export').toBlob(options),
+      toBlob: (options) => core.get('export').toBlob(options),
     };
 
     this.loading = {
-      upload: (data) => this.core.get('loading').upload(data),
-      load: (loader, options) => this.core.get('loading').load(loader, options),
-      cancel: () => this.core.get('loading').cancel(),
-      getState: () => this.core.get('loading').getState(),
+      upload: (data) => core.get('loading').upload(data),
+      load: (loader, options) => core.get('loading').load(loader, options),
+      cancel: () => core.get('loading').cancel(),
+      getState: () => core.get('loading').getState(),
     };
   }
 
@@ -148,47 +143,32 @@ export class HDRCanvas implements IHDRCanvas {
    * @param callback - Event callback (data type inferred from event)
    * @param options - Optional throttle configuration
    * @returns Unsubscribe function
-   *
-   * @example
-   * // Viewport events
-   * canvas.on('viewport:mutation', (data) => {
-   *   if (data.mutation.type === 'zoom') {
-   *     console.log('Zoom:', data.mutation.zoom);
-   *   }
-   * });
-   *
-   * // Loading events
-   * canvas.on('loading:stateChange', (data) => {
-   *   console.log('State:', data.state);
-   * }, { throttle: 100 });
    */
   on<K extends keyof HDRCanvasEventMap>(
     event: K,
     callback: (data: HDRCanvasEventMap[K]) => void,
     options?: EventBusOptions
   ): () => void {
-    return this.core.getEventBus().on(event, callback, options);
+    return this.runtime.getEventBus().on(event, callback, options);
   }
 
   // ============================================================
-  // Initialization & Loading
+  // Initialization & Cleanup
   // ============================================================
 
   /**
-   * Initialize WebGPU context (must be called before loading images)
+   * Initialize rendering context (must be called before loading images)
    */
   async initialize(): Promise<void> {
-    await this.core.initialize();
+    await this.runtime.start();
   }
 
-  // ============================================================
-  // Cleanup
-  // ============================================================
-
   /**
-   * Cleanup GPU resources
+   * Cleanup all resources
    */
   destroy(): void {
-    this.core.destroy();
+    // stop() is async but we fire-and-forget for backward compatibility
+    // (destroy() was always sync in the old API)
+    void this.runtime.stop();
   }
 }

@@ -82,7 +82,6 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
       </div>
     );
   }
-  console.log('[ImageCanvas] Rerender call', renderState);
   return (
     <div>
       <HDRImage

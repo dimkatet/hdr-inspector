@@ -25,11 +25,6 @@ import type { HDRCanvasEventMap } from './EventTypes';
 import type { TypedEventBus } from './TypedEventBus';
 
 /**
- * Lifecycle states for CanvasCore
- */
-export type CoreLifecycle = 'created' | 'initializing' | 'ready' | 'destroyed';
-
-/**
  * Internal configuration derived from HDRCanvasOptions
  */
 export interface CoreConfig {

@@ -34,11 +34,21 @@ export interface UseViewportResult {
  * Thin wrapper around HDRCanvas.attachInteractions().
  */
 export function useViewport(
-  instanceRef: React.RefObject<IHDRCanvas | null>,
-  _canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  instance: IHDRCanvas | null,
   options: UseViewportOptions = {}
 ): UseViewportResult {
-  const { enabled = false, onViewportChange, keyboard, ...viewportConfig } = options;
+  const {
+    enabled = false,
+    onViewportChange,
+    keyboard,
+    wheel,
+    drag,
+    touch,
+    minZoom,
+    maxZoom,
+    animationDuration,
+    easing,
+  } = options;
 
   const [viewport, setViewport] = useState<ViewportState>({
     zoom: 1,
@@ -52,19 +62,37 @@ export function useViewport(
     onViewportChangeRef.current = onViewportChange;
   }, [onViewportChange]);
 
+  // Derive stable primitive values from potentially-object configs.
+  // Using these as deps (instead of the objects) prevents re-attachment on every render
+  // when the user passes inline object literals like `wheel={{ sensitivity: 0.002 }}`.
+  const wheelEnabled = typeof wheel === 'boolean' ? wheel : wheel?.enabled;
+  const wheelSensitivity = typeof wheel === 'object' ? wheel?.sensitivity : undefined;
+  const keyboardEnabled = typeof keyboard === 'boolean' ? keyboard : keyboard?.enabled;
+
   // Attach interactions when enabled
-  // biome-ignore lint/correctness/useExhaustiveDependencies: TODO - need to verify which options should trigger re-attachment vs just updating config
   useEffect(() => {
-    if (!enabled || !instanceRef.current) {
+    if (!enabled || !instance) {
       return;
     }
 
-    const detachInteractions = instanceRef.current.interaction.attach({
-      ...viewportConfig,
-      keyboard,
+    // Reconstruct config objects from primitives so deps are honest
+    const wheelConfig = wheelSensitivity !== undefined
+      ? { enabled: wheelEnabled, sensitivity: wheelSensitivity }
+      : wheelEnabled;
+    const keyboardConfig = keyboardEnabled;
+
+    const detachInteractions = instance.interaction.attach({
+      wheel: wheelConfig,
+      drag,
+      touch,
+      keyboard: keyboardConfig,
+      minZoom,
+      maxZoom,
+      animationDuration,
+      easing,
     });
 
-    const unsubscribeViewport = instanceRef.current.on('viewport:update', ({ state }) => {
+    const unsubscribeViewport = instance.on('viewport:update', ({ state }) => {
       setViewport(state);
       onViewportChangeRef.current?.(state);
     });
@@ -75,19 +103,23 @@ export function useViewport(
     };
   }, [
     enabled,
-    instanceRef,
-    viewportConfig.minZoom,
-    viewportConfig.maxZoom,
-    viewportConfig.animationDuration,
-    viewportConfig.easing,
-    keyboard,
+    instance,
+    wheelEnabled,
+    wheelSensitivity,
+    drag,
+    touch,
+    keyboardEnabled,
+    minZoom,
+    maxZoom,
+    animationDuration,
+    easing,
   ]);
 
   // Reset function
   const resetViewport = useCallback(() => {
-    instanceRef.current?.viewport.reset();
+    instance?.viewport.reset();
     setViewport({ zoom: 1, panX: 0, panY: 0 });
-  }, [instanceRef]);
+  }, [instance]);
 
   return { viewport, resetViewport };
 }

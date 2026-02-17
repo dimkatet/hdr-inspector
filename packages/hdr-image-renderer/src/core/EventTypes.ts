@@ -12,6 +12,7 @@ import type {
   ViewportMutation,
   ViewportState,
 } from '../types';
+import type { RuntimeState } from './RuntimeService';
 
 /**
  * HDRCanvas Event Map
@@ -48,6 +49,12 @@ export interface HDRCanvasEventMap {
   'canvas:resized': {
     width: number;
     height: number;
+  };
+
+  // Runtime lifecycle events
+  'runtime:stateChange': {
+    state: RuntimeState;
+    previousState: RuntimeState;
   };
 }
 

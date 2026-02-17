@@ -11,6 +11,7 @@
  * - ShaderConstants: Utility functions for shader constant indices
  */
 
+import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { ColorSpace, ImageData } from '../types';
@@ -31,7 +32,7 @@ export interface WebGPURendererOptions {
   logger?: Logger;
 }
 
-export class WebGPURenderer implements Renderer {
+export class WebGPURenderer implements Renderer, RuntimeService {
   private canvas: HTMLCanvasElement;
   private transparent = false;
   private logger: Logger;
@@ -53,6 +54,30 @@ export class WebGPURenderer implements Renderer {
       this.logger
     );
   }
+
+  // ============================================================
+  // RuntimeService implementation
+  // ============================================================
+
+  async init(_ctx: RuntimeContext): Promise<void> {
+    return this.initialize();
+  }
+
+  start(): void {
+    // no-op — renderer is passive, renders on demand
+  }
+
+  stop(): void {
+    // no-op — renderer has no background activity
+  }
+
+  dispose(): void {
+    this.destroy();
+  }
+
+  // ============================================================
+  // Renderer interface
+  // ============================================================
 
   /**
    * Initialize WebGPU context and resources

@@ -6,6 +6,7 @@
  */
 
 import type { HDRCanvasEventMap } from './core/EventTypes';
+import type { RuntimeContext, RuntimeService } from './core/RuntimeService';
 import type { TypedEventBus } from './core/TypedEventBus';
 import type { ImageUploadService } from './ImageUploadService';
 import type {
@@ -20,14 +21,36 @@ import type {
 /**
  * Manages async image loading with fallback support
  */
-export class ImageLoadingManager implements LoadingAPI {
+export class ImageLoadingManager implements LoadingAPI, RuntimeService {
   private state: LoadingState = { status: 'idle', displayedImage: 'none' };
   private abortController: AbortController | null = null;
+  private runtimeSignal: AbortSignal | null = null;
 
   constructor(
     private uploadService: ImageUploadService,
     private eventBus?: TypedEventBus<HDRCanvasEventMap>
   ) {}
+
+  // ============================================================
+  // RuntimeService implementation
+  // ============================================================
+
+  async init(ctx: RuntimeContext): Promise<void> {
+    this.runtimeSignal = ctx.signal;
+  }
+
+  start(): void {
+    // no-op
+  }
+
+  stop(): void {
+    this.cancel();
+  }
+
+  dispose(): void {
+    this.cancel();
+    this.runtimeSignal = null;
+  }
 
   /**
    * Upload image data directly (synchronous path, no placeholder/fallback)

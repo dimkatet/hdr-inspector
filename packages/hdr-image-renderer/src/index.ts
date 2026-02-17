@@ -1,5 +1,9 @@
 // Core exports for vanilla JS API
 
+// Runtime & lifecycle exports
+export { CanvasRuntime } from './core/CanvasRuntime';
+export type { RuntimeContext, RuntimeService, RuntimeState } from './core/RuntimeService';
+
 // Event system exports
 export type { HDRCanvasEventMap } from './core/EventTypes';
 export type { EventBusOptions } from './core/TypedEventBus';

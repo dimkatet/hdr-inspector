@@ -9,7 +9,7 @@ import type { HDRCanvasOptions, IHDRCanvas, ObjectFit } from '../../types';
  *   (e.g., 'auto' is resolved to 'contain' before reaching here)
  */
 export function useRenderOptions(
-  instanceRef: React.RefObject<IHDRCanvas | null>,
+  instance: IHDRCanvas | null,
   options: HDRCanvasOptions,
   objectFitOverride?: ObjectFit
 ): void {
@@ -17,7 +17,7 @@ export function useRenderOptions(
   const resolvedObjectFit = objectFitOverride ?? objectFit;
 
   useEffect(() => {
-    instanceRef.current?.render.updateOptions({
+    instance?.render.updateOptions({
       exposure,
       toneMapping,
       hdrMode,
@@ -32,6 +32,6 @@ export function useRenderOptions(
     visualizationMode,
     colorSpace,
     resolvedObjectFit,
-    instanceRef,
+    instance,
   ]);
 }

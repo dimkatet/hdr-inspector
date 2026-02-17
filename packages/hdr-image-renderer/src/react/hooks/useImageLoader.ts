@@ -35,9 +35,11 @@ const IDLE_STATE: LoadingState = { status: 'idle', displayedImage: 'none' };
 /**
  * Hook for loading images into HDRCanvas.
  * Supports both direct ImageData and async loader function.
+ *
+ * Automatically loads when `instance` transitions from null → object.
  */
 export function useImageLoader(
-  instanceRef: React.RefObject<IHDRCanvas | null>,
+  instance: IHDRCanvas | null,
   options: UseImageLoaderOptions
 ): UseImageLoaderResult {
   const {
@@ -51,26 +53,16 @@ export function useImageLoader(
     onLoadingStateChange,
   } = options;
 
-  // Keep all callbacks in refs to avoid effect re-runs
   const loaderRef = useRef(loader);
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   const onLoadingStateChangeRef = useRef(onLoadingStateChange);
 
-  useEffect(() => {
-    loaderRef.current = loader;
-  }, [loader]);
-  useEffect(() => {
-    onLoadRef.current = onLoad;
-  }, [onLoad]);
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-  useEffect(() => {
-    onLoadingStateChangeRef.current = onLoadingStateChange;
-  }, [onLoadingStateChange]);
+  useEffect(() => { loaderRef.current = loader; }, [loader]);
+  useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
+  useEffect(() => { onErrorRef.current = onError; }, [onError]);
+  useEffect(() => { onLoadingStateChangeRef.current = onLoadingStateChange; }, [onLoadingStateChange]);
 
-  // Track loading state for async loader
   const [state, setState] = useState<LoadingState>(IDLE_STATE);
 
   // Notify parent of state changes
@@ -84,45 +76,43 @@ export function useImageLoader(
 
   // Cancel function
   const cancelRef = useRef(() => {
-    instanceRef.current?.loading.cancel();
+    instance?.loading.cancel();
   });
+  useEffect(() => {
+    cancelRef.current = () => instance?.loading.cancel();
+  }, [instance]);
 
   // Load direct ImageData
   useEffect(() => {
-    if (!image) return;
+    if (!image || !instance) return;
 
-    instanceRef.current?.loading
+    instance.loading
       .upload(image)
       .then(() => {
-        console.log(instanceRef.current);
-        if (!instanceRef.current) return;
-        const info = instanceRef.current?.control.getImageInfo();
+        if (!instance) return;
+        const info = instance.control.getImageInfo();
         onLoadRef.current?.(info);
       })
       .catch((err) => {
         onErrorRef.current?.(err);
       });
-  }, [image, instanceRef]);
+  }, [image, instance]);
 
   // Load via async loader
   useEffect(() => {
     const currentLoader = loaderRef.current;
-    if (!currentLoader || !instanceRef.current) return;
+    if (!currentLoader || !instance) return;
 
-    // Subscribe to state changes from ImageLoadingManager
-    // const unsubscribe = instanceRef.current?.loading.onStateChange(setState);
-    const unsubscribe = instanceRef.current?.on('loading:stateChange', ({ state }) =>
+    const unsubscribe = instance.on('loading:stateChange', ({ state }) =>
       setState(state)
     );
 
-    // Start loading
-    instanceRef.current?.loading
+    instance.loading
       .load(currentLoader, { placeholder, errorFallback, timeout })
       .then((info) => {
         onLoadRef.current?.(info);
       })
       .catch((error) => {
-        // Don't call onError for cancellation
         if (error?.message !== 'Loading cancelled') {
           onErrorRef.current?.(error);
         }
@@ -130,10 +120,9 @@ export function useImageLoader(
 
     return () => {
       unsubscribe();
-      instanceRef.current?.loading.cancel();
+      try { instance.loading.cancel(); } catch { /* instance may be destroyed */ }
     };
-  }, [instanceRef, placeholder, errorFallback, timeout]);
-  // Note: loader is accessed via ref, not in deps
+  }, [instance, placeholder, errorFallback, timeout]);
 
   return {
     state,

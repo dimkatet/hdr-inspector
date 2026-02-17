@@ -8,8 +8,11 @@
  */
 
 import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { TypedEventBus } from '../core/TypedEventBus';
 import type { InteractionTarget } from '../interaction/InteractionTarget';
+import type { Logger } from '../logger';
+import { silentLogger } from '../logger';
 import type { EasingFunction, ViewportConfig, ViewportMutation, ViewportState } from '../types';
 
 const DEFAULT_CONFIG: Required<ViewportConfig> = {
@@ -37,7 +40,7 @@ function clampPan(pan: number, zoom: number): number {
   return Math.max(-maxPan, Math.min(maxPan, pan));
 }
 
-export class ViewportController implements InteractionTarget {
+export class ViewportController implements InteractionTarget, RuntimeService {
   private state: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private target: ViewportState = { zoom: 1, panX: 0, panY: 0 };
   private animationId: number | null = null;
@@ -48,11 +51,15 @@ export class ViewportController implements InteractionTarget {
   private animationStartTime: number | null = null;
   private animationDuration = 0;
 
+  private logger: Logger;
+
   constructor(
     config: Partial<ViewportConfig> = {},
-    private eventBus?: TypedEventBus<HDRCanvasEventMap>
+    private eventBus?: TypedEventBus<HDRCanvasEventMap>,
+    logger?: Logger
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.logger = logger ?? silentLogger;
   }
 
   /**
@@ -109,6 +116,13 @@ export class ViewportController implements InteractionTarget {
   applyMutation(mutation: ViewportMutation): void {
     const prevTarget = this.getTarget();
     this.target = this.processMutation(mutation);
+
+    this.logger.log('[ViewportController] applyMutation:', {
+      type: mutation.type,
+      source: mutation.source,
+      prevZoom: prevTarget.zoom.toFixed(3),
+      targetZoom: this.target.zoom.toFixed(3),
+    });
 
     this.emitMutation(mutation, prevTarget, this.getTarget());
 
@@ -233,7 +247,9 @@ export class ViewportController implements InteractionTarget {
     this.animationDuration = duration;
 
     // Don't start new rAF loop if one is already running
-    if (this.animationId !== null) return;
+    if (this.animationId !== null) {
+      return;
+    }
 
     const easing = EASINGS[this.config.easing];
 
@@ -297,7 +313,32 @@ export class ViewportController implements InteractionTarget {
    * Update config
    */
   updateConfig(config: Partial<ViewportConfig>): void {
-    this.config = { ...this.config, ...config };
+    this.config = {
+      animationDuration: config.animationDuration ?? this.config.animationDuration,
+      easing: config.easing ?? this.config.easing,
+      minZoom: config.minZoom ?? this.config.minZoom,
+      maxZoom: config.maxZoom ?? this.config.maxZoom,
+    };
+  }
+
+  // ============================================================
+  // RuntimeService implementation
+  // ============================================================
+
+  async init(_ctx: RuntimeContext): Promise<void> {
+    // no-op — ViewportController is configured via constructor
+  }
+
+  start(): void {
+    // no-op — event subscriptions are wired externally by CanvasRuntime
+  }
+
+  stop(): void {
+    this.stopAnimation();
+  }
+
+  dispose(): void {
+    this.stopAnimation();
   }
 
   /**

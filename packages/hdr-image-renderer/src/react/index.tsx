@@ -171,31 +171,31 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   );
 
   // Initialize HDRCanvas instance
-  const { canvasRef, instanceRef } = useHDRCanvas(initialOptions, onError);
+  const { canvasRef, instance } = useHDRCanvas(initialOptions, onError);
 
   // Subscribe to zoom changes
-  useZoomCallback(instanceRef, onZoom);
+  useZoomCallback(instance, onZoom);
 
   // Expose imperative handle
   useImperativeHandle(
     ref,
     () => ({
-      zoomIn: (factor?: number) => instanceRef.current?.viewport.zoomIn(factor),
-      zoomOut: (factor?: number) => instanceRef.current?.viewport.zoomOut(factor),
-      zoomToFit: () => instanceRef.current?.viewport.zoomToFit(),
-      zoomToActual: () => instanceRef.current?.viewport.zoomToActual(),
-      resetViewport: () => instanceRef.current?.viewport.reset(),
-      getViewport: () => instanceRef.current?.viewport.getState() ?? { zoom: 1, panX: 0, panY: 0 },
-      setViewport: (viewport) => instanceRef.current?.viewport.setViewport(viewport),
+      zoomIn: (factor?: number) => instance?.viewport.zoomIn(factor),
+      zoomOut: (factor?: number) => instance?.viewport.zoomOut(factor),
+      zoomToFit: () => instance?.viewport.zoomToFit(),
+      zoomToActual: () => instance?.viewport.zoomToActual(),
+      resetViewport: () => instance?.viewport.reset(),
+      getViewport: () => instance?.viewport.getState() ?? { zoom: 1, panX: 0, panY: 0 },
+      setViewport: (viewport) => instance?.viewport.setViewport(viewport),
       export: async (options?: ExportOptions) => {
-        if (!instanceRef.current) {
+        if (!instance) {
           throw new Error('HDRCanvas instance not initialized');
         }
-        return await instanceRef.current.export.toBlob(options);
+        return await instance.export.toBlob(options);
       },
-      getCanvas: () => instanceRef.current,
+      getCanvas: () => instance,
     }),
-    [instanceRef]
+    [instance]
   );
 
   // Handle image load with aspect ratio extraction (for 'auto' objectFit)
@@ -210,7 +210,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   );
 
   // Load image (supports both direct ImageData and async loader)
-  useImageLoader(instanceRef, {
+  useImageLoader(instance, {
     image,
     loader,
     placeholder,
@@ -222,7 +222,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   });
 
   // Sync render options (with resolved objectFit)
-  useRenderOptions(instanceRef, options, resolvedObjectFit);
+  useRenderOptions(instance, options, resolvedObjectFit);
 
   // Setup zoom/pan if enabled
   const viewportOptions: UseViewportOptions =
@@ -230,7 +230,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
       ? { enabled: interactions, onViewportChange }
       : { enabled: true, ...interactions, onViewportChange };
 
-  useViewport(instanceRef, canvasRef, viewportOptions);
+  useViewport(instance, viewportOptions);
 
   // Build canvas style
   const canvasStyle: React.CSSProperties = {

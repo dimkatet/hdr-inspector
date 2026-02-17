@@ -7,6 +7,9 @@
  * Uses InteractionTarget interface to decouple from specific viewport implementations.
  */
 
+import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
+import type { Logger } from '../logger';
+import { silentLogger } from '../logger';
 import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
 import type { InteractionTarget } from './InteractionTarget';
 import { KeyboardHandler } from './KeyboardHandler';
@@ -20,20 +23,23 @@ interface ZoomCommands {
   zoomToActual: () => void;
 }
 
-export class InteractionManager implements InteractionAPI {
+export class InteractionManager implements InteractionAPI, RuntimeService {
   private canvas: HTMLCanvasElement;
   private target: InteractionTarget;
   private getZoomCommands: () => ZoomCommands;
   private cleanupFunctions: Array<() => void> = [];
+  private logger: Logger;
 
   constructor(
     canvas: HTMLCanvasElement,
     target: InteractionTarget,
-    getZoomCommands: () => ZoomCommands
+    getZoomCommands: () => ZoomCommands,
+    logger: Logger = silentLogger
   ) {
     this.canvas = canvas;
     this.target = target;
     this.getZoomCommands = getZoomCommands;
+    this.logger = logger;
   }
 
   /**
@@ -46,6 +52,8 @@ export class InteractionManager implements InteractionAPI {
     this.detach();
 
     const { wheel, drag, touch, keyboard, ...viewportConfig } = options;
+
+    this.logger.log('[InteractionManager] attach:', { wheel, drag, touch, keyboard });
 
     // Apply viewport config
     if (Object.keys(viewportConfig).length > 0) {
@@ -81,11 +89,12 @@ export class InteractionManager implements InteractionAPI {
             deltaY,
             source: 'drag',
           }),
-        onDblClick: () =>
+        onDblClick: () => {
           this.target.applyMutation({
             type: 'reset',
             source: 'dblclick',
-          }),
+          });
+        },
       },
       { wheel: wheelEnabled, drag }
     );
@@ -114,11 +123,12 @@ export class InteractionManager implements InteractionAPI {
             source: 'pinch',
           });
         },
-        onDoubleTap: () =>
+        onDoubleTap: () => {
           this.target.applyMutation({
             type: 'reset',
             source: 'doubletap',
-          }),
+          });
+        },
       },
       { enabled: touch }
     );
@@ -130,23 +140,25 @@ export class InteractionManager implements InteractionAPI {
     const keyboardHandler = new KeyboardHandler(
       this.canvas,
       {
-        onPan: (deltaX, deltaY) =>
+        onPan: (deltaX, deltaY) => {
           this.target.applyMutation({
             type: 'pan',
             deltaX,
             deltaY,
             source: 'keyboard',
-          }),
+          });
+        },
         onZoomIn: () => commands.zoomIn(),
         onZoomOut: () => commands.zoomOut(),
         onZoomToFit: () => commands.zoomToFit(),
         onZoomToActual: () => commands.zoomToActual(),
-        onReset: () =>
+        onReset: () => {
           this.target.applyMutation({
             type: 'reset',
             source: 'keyboard',
             duration: 0,
-          }),
+          });
+        },
       },
       typeof keyboard === 'boolean' ? { enabled: keyboard } : keyboard
     );
@@ -170,5 +182,25 @@ export class InteractionManager implements InteractionAPI {
       cleanup();
     }
     this.cleanupFunctions = [];
+  }
+
+  // ============================================================
+  // RuntimeService implementation
+  // ============================================================
+
+  async init(_ctx: RuntimeContext): Promise<void> {
+    // no-op — configured via constructor
+  }
+
+  start(): void {
+    // no-op — interactions are attached explicitly via attach()
+  }
+
+  stop(): void {
+    this.detach();
+  }
+
+  dispose(): void {
+    this.detach();
   }
 }

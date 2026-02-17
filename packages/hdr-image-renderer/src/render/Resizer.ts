@@ -6,10 +6,11 @@
  */
 
 import type { HDRCanvasEventMap } from '../core/EventTypes';
+import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { TypedEventBus } from '../core/TypedEventBus';
 import type { ResizeService } from './ResizeService';
 
-export class CanvasResizer implements ResizeService {
+export class CanvasResizer implements ResizeService, RuntimeService {
   private canvas: HTMLCanvasElement;
   private onResize: () => void;
   private observer: ResizeObserver | null = null;
@@ -75,5 +76,25 @@ export class CanvasResizer implements ResizeService {
    */
   isEnabled(): boolean {
     return this.observer !== null;
+  }
+
+  // ============================================================
+  // RuntimeService implementation
+  // ============================================================
+
+  async init(_ctx: RuntimeContext): Promise<void> {
+    // no-op
+  }
+
+  start(): void {
+    // no-op — resizer is enabled explicitly via enable()
+  }
+
+  stop(): void {
+    this.disable();
+  }
+
+  dispose(): void {
+    this.disable();
   }
 }
