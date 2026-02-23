@@ -27,6 +27,8 @@ import { ViewportCommands, ViewportController, ViewportLayoutService } from '../
 import { WebGPUUploadService } from '../WebGPUUploadService';
 import { ServiceRegistry } from './CanvasCore';
 import type { DomainEventMap, HDRCanvasEventMap, RuntimeEventMap } from './EventTypes';
+import type { HDRPlugin } from './Plugin';
+import { PluginManager } from './PluginManager';
 import { RuntimeKernel } from './RuntimeKernel';
 import type { RuntimeContext, RuntimeService } from './RuntimeService';
 import { TypedEventBus } from './TypedEventBus';
@@ -36,6 +38,7 @@ export class CanvasRuntime {
   private kernel = new RuntimeKernel();
   private config: CoreConfig;
   private logger: Logger;
+  private pluginManager: PluginManager;
 
   readonly registry: ServiceRegistry;
 
@@ -45,8 +48,19 @@ export class CanvasRuntime {
   ) {
     this.config = normalizeConfig(options);
     this.logger = createLogger(this.config.debug);
+    this.pluginManager = new PluginManager(this.logger);
     this.registry = new ServiceRegistry();
     this.bootstrap();
+  }
+
+  /**
+   * Register a plugin.
+   *
+   * Can be called before or after `initialize()`.
+   * If the runtime is already running, the plugin is installed immediately.
+   */
+  addPlugin(plugin: HDRPlugin): void {
+    this.pluginManager.add(plugin);
   }
 
   /**
@@ -87,6 +101,7 @@ export class CanvasRuntime {
       }
 
       this.kernel.markRunning();
+      await this.pluginManager.installAll(this.createPluginContext());
     } catch (error) {
       this.logger.warn('[CanvasRuntime] Init failed, rolling back:', error);
       this.rollback(initialized);
@@ -102,6 +117,9 @@ export class CanvasRuntime {
    */
   async stop(): Promise<void> {
     if (!this.kernel.prepareStop()) return;
+
+    // Uninstall plugins before stopping services
+    await this.pluginManager.uninstallAll();
 
     // Stop and dispose in reverse order
     const instances = this.registry.getManagedInstances();
@@ -138,16 +156,19 @@ export class CanvasRuntime {
   requestRender(): void {
     if (this.kernel.state !== 'running') return;
 
+    const eventBus = this.registry.get('eventBus');
     const renderer = this.registry.get('renderer');
     const settings = this.registry.get('settings');
     const viewport = this.registry.get('viewport');
+
+    eventBus.emit('render:beforeFrame', {});
 
     renderer.render({
       ...settings.getState(),
       viewport: viewport.getState(),
     });
 
-    this.registry.get('eventBus').emit('render:complete', {});
+    eventBus.emit('render:complete', {});
   }
 
   private compositeEventBus: TypedEventBus<HDRCanvasEventMap> | null = null;
@@ -183,13 +204,15 @@ export class CanvasRuntime {
     // Reset composite event bus (will be recreated on next getEventBus() call)
     this.compositeEventBus = null;
 
-    // Renderer (managed)
+    // Renderer (managed) — use custom backend if provided, otherwise default to WebGPU
     this.registry.registerManaged('renderer', () => {
-      setGPUDeviceLogger(this.logger);
-      const renderer = new WebGPURenderer(this.canvas, {
-        transparent: this.config.transparent,
-        logger: this.logger,
-      });
+      const renderer = this.config.renderer ?? (() => {
+        setGPUDeviceLogger(this.logger);
+        return new WebGPURenderer(this.canvas, {
+          transparent: this.config.transparent,
+          logger: this.logger,
+        });
+      })();
       this.registry.trackManagedInstance('renderer', renderer);
       return renderer;
     });
@@ -305,6 +328,18 @@ export class CanvasRuntime {
       signal: this.kernel.signal,
       logger: this.logger,
       config: this.config,
+    };
+  }
+
+  /**
+   * Create PluginContext for plugin install
+   */
+  private createPluginContext(): import('./Plugin').PluginContext {
+    return {
+      canvas: this.canvas,
+      services: this.registry,
+      events: this.getEventBus(),
+      logger: this.logger,
     };
   }
 

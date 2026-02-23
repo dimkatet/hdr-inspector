@@ -6,7 +6,7 @@ import type { ImageUploadService } from '../ImageUploadService';
 import type { ViewportFacade } from '../interaction/ViewportFacade';
 import type { Logger } from '../logger';
 import type { PixelReadbackService } from '../render/PixelReadbackService';
-import type { Renderer } from '../render/Renderer';
+import type { Renderer, RendererService } from '../render/Renderer';
 import type { ResizeService } from '../render/ResizeService';
 import type {
   ColorSpace,
@@ -30,6 +30,7 @@ import type { TypedEventBus } from './TypedEventBus';
 export interface CoreConfig {
   debug: boolean;
   transparent: boolean;
+  renderer?: RendererService;
   renderOptions: {
     exposure?: number;
     toneMapping?: ToneMappingOperator;
@@ -83,6 +84,7 @@ export function normalizeConfig(options: HDRCanvasOptions): CoreConfig {
   return {
     debug: options.debug ?? false,
     transparent: options.transparent ?? false,
+    renderer: options.renderer,
     renderOptions: {
       exposure: options.exposure ?? 0,
       toneMapping: options.toneMapping ?? 'aces',

@@ -1,34 +1,37 @@
 # @dimkatet/hdr-image-renderer
 
-WebGPU-based HDR image viewer with native HDR display support.
+WebGPU-based HDR image renderer with native HDR display support, plugin system, and React integration.
 
 ## Features
 
-- 🎨 **Native HDR rendering** with WebGPU
-- 📊 **Radiance HDR (.hdr) decoder** built-in
-- 🎛️ **Tone mapping** operators (None, Reinhard, ACES)
-- 🌈 **Color space support** (sRGB, Display P3, Rec.2020)
-- 🖱️ **Interactive** - zoom, pan, touch gestures
-- 🎯 **Programmatic control** - imperative API via ref
-- ⚡ **Zero dependencies** (except React for `/react` export)
-- 📦 **Tree-shakeable** ESM exports
-- 🔧 **TypeScript** first-class support
+- **Native HDR rendering** with WebGPU (rgba16float + extended tone mapping)
+- **Tone mapping** operators — None, Reinhard, ACES
+- **Color space support** — sRGB, Display P3, Rec.2020
+- **Visualization modes** — RGB, Luminance false-color, Clipping overlay
+- **Zoom & pan** with smooth animation, pinch-to-zoom, keyboard navigation
+- **Object-fit** — contain, cover, fill, none, scale-down
+- **Plugin system** — extend rendering, input, and export without forking
+- **Swappable backends** — provide your own renderer (WebGL, WASM, etc.)
+- **Async image loading** with placeholder and error fallback support
+- **Image export** — PNG/JPEG/custom via pixel readback
+- **React component** with composable hooks and imperative ref API
+- **Zero hard dependencies** (React is an optional peer dependency)
+- **Tree-shakeable** ESM only
 
 ## Installation
 
 ```bash
 npm install @dimkatet/hdr-image-renderer
-# or
 pnpm add @dimkatet/hdr-image-renderer
-# or
-yarn add @dimkatet/hdr-image-renderer
 ```
 
 ## Browser Requirements
 
-- **Chrome/Edge 113+** (Windows/macOS) - Full WebGPU + HDR support
-- **Safari 18+** (macOS) - WebGPU support, partial HDR canvas
-- **Firefox Nightly** - Experimental WebGPU only
+- **Chrome/Edge 113+** — Full WebGPU + HDR
+- **Safari 18+** — WebGPU, partial HDR canvas
+- **Firefox Nightly** — Experimental WebGPU only
+
+---
 
 ## Usage
 
@@ -37,291 +40,425 @@ yarn add @dimkatet/hdr-image-renderer
 ```typescript
 import { HDRCanvas } from '@dimkatet/hdr-image-renderer'
 
-const canvas = document.querySelector('canvas')
-const hdrCanvas = new HDRCanvas(canvas, {
+const canvas = document.querySelector('canvas')!
+const hdr = new HDRCanvas(canvas, {
   hdrMode: true,
   exposure: 0,
   toneMapping: 'aces',
-  colorSpace: 'display-p3'
+  colorSpace: 'display-p3',
 })
 
-// Initialize and load HDR file
-await hdrCanvas.initialize()
-const response = await fetch('image.hdr')
-const buffer = await response.arrayBuffer()
-await hdrCanvas.loadRadianceHDR(buffer)
+await hdr.initialize()
 
-// Enable auto-resize
-hdrCanvas.enableAutoResize()
+// Load image (bring your own decoder — library is format-agnostic)
+const buffer = await fetch('photo.hdr').then(r => r.arrayBuffer())
+const imageData = myRadianceHDRDecoder(buffer) // → LinearImageData
+await hdr.loading.upload(imageData)
 
-// Attach interactions (wheel, drag, touch)
-const cleanup = hdrCanvas.attachInteractions({
+// Render settings
+hdr.render.setExposure(1.5)
+hdr.render.setToneMapping('aces')
+hdr.render.setHDRMode(true)
+hdr.render.setColorSpace('display-p3')
+
+// Viewport
+hdr.viewport.zoomIn(2)
+hdr.viewport.zoomOut()
+hdr.viewport.zoomToFit()
+hdr.viewport.zoomToActual()
+hdr.viewport.reset()
+
+// Interactions
+const detach = hdr.interaction.attach({
   wheel: true,
   drag: true,
   touch: true,
-  minZoom: 0.5,
+  keyboard: true,
+  minZoom: 0.1,
   maxZoom: 20,
-  onAnimationEnd: (viewport) => {
-    console.log('Zoom:', viewport.zoom)
-  }
 })
 
-// Or programmatic control
-hdrCanvas.zoomIn(2)      // Zoom in 2x
-hdrCanvas.zoomOut()      // Zoom out 2x
-hdrCanvas.zoomToFit()    // Show entire image
-hdrCanvas.zoomToActual() // 1:1 pixel mapping
-hdrCanvas.resetViewportAnimated() // Reset with animation
+// Canvas auto-resize
+hdr.control.enableAutoResize()
 
-// Update render settings
-hdrCanvas.setExposure(1.5)
-hdrCanvas.setToneMapping('reinhard')
-hdrCanvas.setHDRMode(false)
+// Events
+hdr.on('viewport:update', ({ state }) => console.log('Zoom:', state.zoom))
+hdr.on('render:complete', () => console.log('Frame rendered'))
+
+// Export
+const blob = await hdr.export.toBlob({ format: 'image/png' })
 
 // Cleanup
-cleanup() // Remove interaction listeners
-hdrCanvas.destroy() // Destroy GPU resources
+detach()
+hdr.destroy()
 ```
 
 ### React
 
 ```tsx
 import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react'
-import { useState, useRef } from 'react'
+import { useRef, useState } from 'react'
 
 function App() {
-  const [file, setFile] = useState<File | null>(null)
-  const [exposure, setExposure] = useState(0)
+  const ref = useRef<HDRImageHandle>(null)
   const [zoom, setZoom] = useState(1)
-  const hdrRef = useRef<HDRImageHandle>(null)
+  const [imageData, setImageData] = useState<ImageData | null>(null)
+
+  const handleFile = async (file: File) => {
+    const buffer = await file.arrayBuffer()
+    setImageData(myDecoder(buffer))
+  }
 
   return (
-    <>
-      <HDRImage
-        ref={hdrRef}
-        image={file}
-        options={{
-          exposure,
-          toneMapping: 'aces',
-          hdrMode: true,
-          colorSpace: 'display-p3',
-        }}
-        interactions={{
-          wheel: true,
-          drag: true,
-          touch: true,
-          minZoom: 0.5,
-          maxZoom: 20,
-        }}
-        onAnimationEnd={(viewport) => setZoom(viewport.zoom)}
-        onLoad={() => console.log('Loaded!')}
-        onError={(err) => console.error(err)}
-        fitToImage
-        style={{ maxHeight: '80vh' }}
-      />
-
-      {/* Controls */}
-      <div>
-        <input
-          type="file"
-          accept=".hdr"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        />
-        <input
-          type="range"
-          min="-5"
-          max="5"
-          step="0.1"
-          value={exposure}
-          onChange={(e) => setExposure(parseFloat(e.target.value))}
-        />
-        <div>
-          <button onClick={() => hdrRef.current?.zoomIn()}>Zoom In</button>
-          <span>Zoom: {zoom.toFixed(2)}x</span>
-          <button onClick={() => hdrRef.current?.zoomOut()}>Zoom Out</button>
-          <button onClick={() => hdrRef.current?.zoomToFit()}>Fit</button>
-          <button onClick={() => hdrRef.current?.resetViewport()}>Reset</button>
-        </div>
-      </div>
-    </>
+    <HDRImage
+      ref={ref}
+      image={imageData}
+      options={{
+        hdrMode: true,
+        exposure: 0,
+        toneMapping: 'aces',
+        colorSpace: 'display-p3',
+      }}
+      interactions={{
+        wheel: true,
+        drag: true,
+        touch: true,
+        keyboard: true,
+        minZoom: 0.1,
+        maxZoom: 20,
+      }}
+      onZoom={(z) => setZoom(z)}
+      onLoad={(info) => console.log(info.width, info.height)}
+      onError={(err) => console.error(err)}
+      fitToImage
+    />
   )
 }
+
+// Imperative control via ref
+ref.current?.zoomIn()
+ref.current?.zoomToFit()
+ref.current?.resetViewport()
+ref.current?.getViewport()  // { zoom, panX, panY }
 ```
 
-### Using Decoder Directly
-
-```typescript
-import { decodeRadianceHDR } from '@dimkatet/hdr-image-renderer'
-
-const buffer = await fetch('image.hdr').then(r => r.arrayBuffer())
-const imageData = decodeRadianceHDR(buffer)
-
-console.log(imageData.width, imageData.height)
-console.log(imageData.data) // Float32Array - linear RGB
-```
-
-### Detecting HDR Capabilities
-
-```typescript
-import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer'
-
-const caps = await detectHDRCapabilities()
-console.log('WebGPU supported:', caps.webgpuSupported)
-console.log('Display HDR:', caps.displayHDR)
-console.log('Canvas HDR:', caps.canvasHDR)
-console.log('Color gamut:', caps.colorGamut)
-```
+---
 
 ## API Reference
 
-### HDRCanvas
+### `HDRCanvas`
 
-Main class for HDR rendering.
-
-#### Constructor
+Main facade class. Uses a namespaced API for better discoverability.
 
 ```typescript
-new HDRCanvas(canvas: HTMLCanvasElement, options?: HDRCanvasOptions)
+const hdr = new HDRCanvas(canvas, options)
+await hdr.initialize()
+hdr.destroy()
 ```
 
-**Options:**
-- `hdrMode?: boolean` - Enable HDR mode (default: `false`)
-- `exposure?: number` - Exposure in EV stops (default: `0`)
-- `toneMapping?: 'none' | 'reinhard' | 'aces'` - Tone mapping operator (default: `'aces'`)
-- `colorSpace?: 'srgb' | 'display-p3' | 'rec2020'` - Output color space (default: `'display-p3'`)
-- `visualizationMode?: 'rgb' | 'luminance' | 'clipping'` - Visualization mode (default: `'rgb'`)
+#### `HDRCanvasOptions`
 
-#### Methods
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `hdrMode` | `boolean` | `false` | Enable native HDR output |
+| `exposure` | `number` | `0` | Exposure in EV stops |
+| `toneMapping` | `'none' \| 'reinhard' \| 'aces'` | `'aces'` | Tone mapping operator |
+| `colorSpace` | `'srgb' \| 'display-p3' \| 'rec2020'` | `'srgb'` | Output color space |
+| `visualizationMode` | `'rgb' \| 'luminance' \| 'clipping'` | `'rgb'` | Visualization mode |
+| `objectFit` | `'contain' \| 'cover' \| 'fill' \| 'none' \| 'scale-down'` | `'contain'` | Image layout |
+| `transparent` | `boolean` | `false` | Transparent canvas background |
+| `debug` | `boolean` | `false` | Enable debug logging |
+| `renderer` | `RendererService` | WebGPU | Custom rendering backend |
 
-**Loading:**
-- `initialize(): Promise<void>` - Initialize WebGPU (called automatically on first load)
-- `loadImage(data: LinearImageData): Promise<void>` - Load from LinearImageData
-- `loadRadianceHDR(buffer: ArrayBuffer): Promise<void>` - Load Radiance HDR file
-- `loadFile(file: File): Promise<void>` - Load from File (auto-detects format)
-
-**Rendering:**
-- `setExposure(ev: number): void` - Set exposure value
-- `setToneMapping(op: string): void` - Set tone mapping operator
-- `setHDRMode(enabled: boolean): void` - Enable/disable HDR mode
-- `setColorSpace(cs: string): void` - Set color space
-- `setVisualizationMode(mode: string): void` - Set visualization mode
-- `getRenderState(): RenderState` - Get current render state
-
-**Viewport Control:**
-- `zoomIn(factor?: number): void` - Zoom in (default: 2x)
-- `zoomOut(factor?: number): void` - Zoom out (default: 2x)
-- `zoomTo(zoom: number): void` - Set specific zoom level
-- `zoomToFit(): void` - Show entire image (zoom to 1.0)
-- `zoomToActual(): void` - 1:1 pixel mapping
-- `resetViewportAnimated(): void` - Reset viewport with animation
-- `applyWheelZoom(deltaY, cursorX, cursorY): void` - Apply wheel zoom (low-level)
-- `applyDragPan(deltaX, deltaY): void` - Apply drag pan (low-level)
-
-**Interactions:**
-- `attachInteractions(options?: InteractionOptions): () => void` - Attach interaction listeners, returns cleanup function
-- `setViewportCallbacks(onViewportChange?, onAnimationEnd?): void` - Update viewport callbacks
-
-**Lifecycle:**
-- `enableAutoResize(): () => void` - Auto-resize canvas to match CSS size
-- `disableAutoResize(): void` - Disable auto-resize
-- `getImageInfo(): ImageInfo` - Get loaded image dimensions
-- `destroy(): void` - Cleanup GPU resources
-
-### React Component
+#### `canvas.render` — Render Settings
 
 ```typescript
-interface HDRImageProps {
-  // Image source
-  image?: LinearImageData | File
+hdr.render.getState()                    // RenderState
+hdr.render.setExposure(ev)
+hdr.render.setToneMapping(operator)
+hdr.render.setHDRMode(enabled)
+hdr.render.setColorSpace(space)
+hdr.render.setVisualizationMode(mode)
+hdr.render.setObjectFit(mode)
+hdr.render.updateOptions(partial)
+```
 
-  // Render options
-  options: HDRCanvasOptions  // { exposure, toneMapping, hdrMode, colorSpace, visualizationMode, transparent }
+#### `canvas.viewport` — Viewport Control
 
-  // Interactions
-  interactions?: boolean | InteractionsConfig  // Enable/configure zoom, pan, touch
-  onViewportChange?: (viewport: ViewportState) => void  // Fires every frame
-  onAnimationEnd?: (viewport: ViewportState) => void    // Fires once per animation
+```typescript
+hdr.viewport.getState()                  // { zoom, panX, panY }
+hdr.viewport.setConfig(config)           // min/maxZoom, animation settings
 
-  // Layout
-  fitToImage?: boolean  // Auto-adjust canvas aspect ratio
+// Instant
+hdr.viewport.setZoom(zoom)
+hdr.viewport.setPan(x, y)
+hdr.viewport.setViewport({ zoom, panX, panY })
 
-  // Callbacks
-  onLoad?: (info: ImageInfo) => void  // Called when image loads
-  onError?: (error: Error) => void
+// Animated
+hdr.viewport.zoomIn(factor?)
+hdr.viewport.zoomOut(factor?)
+hdr.viewport.zoomToFit()
+hdr.viewport.zoomToActual()
+hdr.viewport.reset(animated?)
+```
 
-  // HTML canvas attributes
-  className?: string
-  style?: React.CSSProperties
+#### `canvas.interaction` — Interactions
+
+```typescript
+const detach = hdr.interaction.attach({
+  wheel?: boolean
+  drag?: boolean
+  touch?: boolean
+  keyboard?: boolean
+  minZoom?: number
+  maxZoom?: number
+})
+hdr.interaction.detach()
+```
+
+#### `canvas.control` — Canvas Control
+
+```typescript
+hdr.control.enableAutoResize()
+hdr.control.disableAutoResize()
+hdr.control.getImageDimensions()         // { width, height }
+hdr.control.getImageInfo()               // { width, height, aspectRatio }
+hdr.control.forceRender()
+```
+
+#### `canvas.loading` — Image Loading
+
+```typescript
+await hdr.loading.upload(imageData)      // Direct upload
+
+await hdr.loading.load(
+  async (signal) => fetchAndDecodeImage(signal),
+  {
+    placeholder: placeholderImageData,
+    errorFallback: fallbackImageData,
+    timeout: 10000,
+  }
+)
+
+hdr.loading.cancel()
+hdr.loading.getState()                   // LoadingState
+```
+
+#### `canvas.export` — Image Export
+
+```typescript
+const blob = await hdr.export.toBlob({
+  format: 'image/png',        // or 'image/jpeg'
+  quality: 0.95,              // for JPEG
+  encoder: async (pixels) => myCustomEncoder(pixels),  // custom
+})
+```
+
+#### `canvas.on()` — Events
+
+```typescript
+// Unsubscribe function returned
+const unsub = hdr.on('viewport:update', ({ state }) => {})
+hdr.on('viewport:mutation', ({ mutation, prev, target }) => {})
+hdr.on('viewport:transitionEnd', ({ state }) => {})
+hdr.on('loading:stateChange', ({ state, type }) => {})
+hdr.on('render:settingsChanged', ({ settings }) => {})
+hdr.on('render:beforeFrame', () => {})   // fires before each GPU draw
+hdr.on('render:complete', () => {})      // fires after each GPU draw
+hdr.on('canvas:resized', ({ width, height }) => {})
+hdr.on('runtime:stateChange', ({ state }) => {})
+
+// With throttle
+hdr.on('viewport:update', handler, { throttle: 16 })
+```
+
+---
+
+## Plugin System
+
+Plugins extend HDRCanvas without modifying core code.
+
+```typescript
+import { HDRCanvas, type HDRPlugin, type PluginContext } from '@dimkatet/hdr-image-renderer'
+```
+
+### Plugin Interface
+
+```typescript
+interface HDRPlugin {
+  readonly name: string
+  install(ctx: PluginContext): void | Promise<void>
+  uninstall?(): void | Promise<void>
 }
 
-interface InteractionsConfig {
-  // Which interactions are enabled
-  wheel?: boolean  // Mouse wheel zoom
-  drag?: boolean   // Mouse drag pan
-  touch?: boolean  // Touch gestures (pinch, drag, double-tap)
-
-  // Viewport behavior
-  minZoom?: number           // Default: 0.1
-  maxZoom?: number           // Default: 10
-  wheelSensitivity?: number  // Default: 0.001
-  animationSpeed?: number    // Default: 0.15
-}
-
-interface HDRImageHandle {
-  // Zoom controls
-  zoomIn: (factor?: number) => void
-  zoomOut: (factor?: number) => void
-  zoomToFit: () => void
-  zoomToActual: () => void
-
-  // Viewport
-  resetViewport: () => void
-  getViewport: () => ViewportState
-  setViewport: (viewport: Partial<ViewportState>) => void
-
-  // Access underlying canvas
-  getCanvas: () => HDRCanvas | null
+interface PluginContext {
+  canvas: HTMLCanvasElement    // DOM canvas element
+  services: ServiceRegistry   // DI container (access any service)
+  events: TypedEventBus       // Unified event bus (all canvas events)
+  logger: Logger              // Debug logger
 }
 ```
 
-**Usage with ref:**
-```tsx
-const ref = useRef<HDRImageHandle>(null)
-ref.current?.zoomIn()
-ref.current?.getViewport()
+### Plugin Types
+
+**RenderPlugin** — hook into the render loop:
+
+```typescript
+const renderOverlayPlugin: HDRPlugin = {
+  name: 'render-overlay',
+  install(ctx) {
+    const overlay = document.createElement('canvas')
+    ctx.canvas.parentElement?.appendChild(overlay)
+
+    ctx.events.on('render:beforeFrame', () => {
+      // update before each GPU frame
+    })
+    ctx.events.on('render:complete', () => {
+      drawOverlayOnTop(overlay, ctx.canvas)
+    })
+  },
+  uninstall() {
+    overlay.remove()
+  }
+}
 ```
+
+**InputPlugin** — add custom input behavior:
+
+```typescript
+const shortcutPlugin: HDRPlugin = {
+  name: 'shortcuts',
+  install(ctx) {
+    const vp = ctx.services.get('viewport')
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'r') vp.reset()
+      if (e.key === '1') ctx.services.get('commands').zoomToActual()
+    }
+    ctx.canvas.addEventListener('keydown', handler)
+    this._cleanup = () => ctx.canvas.removeEventListener('keydown', handler)
+  },
+  uninstall() { this._cleanup?.() }
+}
+```
+
+**ExportPlugin** — custom export format:
+
+```typescript
+const hdrExportPlugin: HDRPlugin = {
+  name: 'hdr-export',
+  install(ctx) {
+    // Save reference for later use
+    this._export = ctx.services.get('export')
+  },
+  async exportAsHDR() {
+    return this._export.toBlob({ encoder: encodeToRadianceHDR })
+  }
+}
+```
+
+### Registering Plugins
+
+```typescript
+// Before initialize() — installed when runtime starts
+const hdr = new HDRCanvas(canvas)
+  .use(renderOverlayPlugin)
+  .use(shortcutPlugin)
+
+await hdr.initialize()
+
+// After initialize() — installed immediately (hot-add)
+hdr.use(latePlugin)
+```
+
+Plugins are automatically uninstalled on `destroy()` and reinstalled on `restart()`.
+
+---
+
+## Custom Rendering Backend
+
+Swap out the default WebGPU renderer with your own implementation:
+
+```typescript
+import { HDRCanvas, type RendererService } from '@dimkatet/hdr-image-renderer'
+import type { RuntimeContext } from '@dimkatet/hdr-image-renderer'
+
+class MyWebGLRenderer implements RendererService {
+  // Renderer interface:
+  async initialize(): Promise<void> { /* init WebGL context */ }
+  render(options: RenderOptions): void { /* draw frame */ }
+  async uploadImage(image: ImageData): Promise<void> { /* upload texture */ }
+  getImageDimensions(): { width: number; height: number } { return this._dims }
+  async readPixels(options: RenderOptions): Promise<PixelReadback> { /* readback */ }
+  dispose(): void { /* cleanup */ }
+
+  // RuntimeService lifecycle:
+  async init(_ctx: RuntimeContext): Promise<void> { await this.initialize() }
+  start(): void {}
+  stop(): void {}
+}
+
+const hdr = new HDRCanvas(canvas, {
+  renderer: new MyWebGLRenderer(),
+  exposure: 0,
+  toneMapping: 'aces',
+})
+await hdr.initialize()
+```
+
+---
+
+## Image Data Types
+
+The library accepts two image data formats:
+
+```typescript
+// LinearImageData — HDR sources (Radiance .hdr, OpenEXR, raw)
+{
+  data: Float32Array | Float16Array  // linear RGB, can exceed 1.0
+  width: number
+  height: number
+  channels: 3 | 4
+  transferFunction: 'linear'
+}
+
+// EncodedImageData — standard images (PNG/JPEG decoded to sRGB)
+{
+  data: Uint8Array | Uint16Array     // encoded integer values
+  width: number
+  height: number
+  channels: 3 | 4
+  transferFunction: 'srgb' | 'pq'
+}
+```
+
+Decoders are not included — bring your own or use the reference implementations in the example app.
+
+---
 
 ## Color Science
 
-All color data is treated as **scene-referred, linear BT.709** unless explicitly converted.
+All color data is treated as **scene-referred, linear BT.709**.
 
 ### Rendering Pipeline
 
-**HDR Mode:**
+**HDR Mode** (native HDR displays):
 ```
-Linear RGB (scene-referred)
-  → Exposure (EV stops, can produce > 1.0)
-  → Color Space Transform (BT.709 → target gamut)
-  → sRGB Transfer Function (EOTF⁻¹, preserves > 1.0)
-  → rgba16float buffer + toneMapping: extended
-  → HDR Display (browser handles final PQ encoding)
+Linear RGB → Exposure → Color Space Transform → sRGB EOTF⁻¹ → rgba16float (toneMapping: extended) → HDR Display
 ```
 
-**SDR Mode:**
+**SDR Mode** (standard displays):
 ```
-Linear RGB (scene-referred)
-  → Exposure (EV stops)
-  → Tone Mapping (clamps to [0,1])
-  → Color Space Transform (BT.709 → target gamut)
-  → sRGB Transfer Function (EOTF⁻¹)
-  → bgra8unorm buffer
-  → SDR Display (~80-100 nits)
+Linear RGB → Exposure → Tone Mapping [0,1] → Color Space Transform → sRGB EOTF⁻¹ → bgra8unorm → SDR Display
 ```
+
+### Tone Mapping Operators
+
+- **None** — `clamp(x, 0, 1)`
+- **Reinhard** — `x / (1 + x)`
+- **ACES** — Narkowicz 2015 approximation
+
+---
 
 ## License
 
 MIT
-
-## Author
-
-dimkatet

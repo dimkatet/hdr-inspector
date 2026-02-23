@@ -4,6 +4,8 @@
  * Types for render settings, tone mapping, and visualization
  */
 
+import type { RendererService } from '../../render/Renderer';
+
 /**
  * Tone mapping operators
  */
@@ -51,6 +53,15 @@ export interface HDRCanvasOptions {
   transparent?: boolean;
   /** Enable debug logging to console (default: false) */
   debug?: boolean;
+  /**
+   * Custom rendering backend. Defaults to WebGPU renderer.
+   *
+   * Use this to substitute an alternative backend (WebGL, WASM CPU, etc.).
+   * The backend must implement both `Renderer` and `RuntimeService` interfaces.
+   *
+   * @see RendererService
+   */
+  renderer?: RendererService;
 }
 
 /**

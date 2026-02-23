@@ -10,6 +10,7 @@
 
 import { CanvasRuntime } from './core/CanvasRuntime';
 import type { HDRCanvasEventMap } from './core/EventTypes';
+import type { HDRPlugin } from './core/Plugin';
 import type { EventBusOptions } from './core/TypedEventBus';
 import type {
   CanvasAPI,
@@ -130,6 +131,27 @@ export class HDRCanvas implements IHDRCanvas {
       cancel: () => registry.get('loading').cancel(),
       getState: () => registry.get('loading').getState(),
     };
+  }
+
+  // ============================================================
+  // Plugin API
+  // ============================================================
+
+  /**
+   * Register a plugin (chainable).
+   *
+   * Can be called before or after `initialize()`.
+   * If the runtime is already running, the plugin is installed immediately.
+   *
+   * @example
+   * const canvas = new HDRCanvas(element)
+   *   .use(myRenderPlugin)
+   *   .use(myInputPlugin)
+   * await canvas.initialize()
+   */
+  use(plugin: HDRPlugin): this {
+    this.runtime.addPlugin(plugin);
+    return this;
   }
 
   // ============================================================

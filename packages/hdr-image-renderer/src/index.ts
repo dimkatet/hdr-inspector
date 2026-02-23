@@ -1,11 +1,9 @@
 // Core exports for vanilla JS API
 
-// Runtime & lifecycle exports
 export { CanvasRuntime } from './core/CanvasRuntime';
-export type { RuntimeContext, RuntimeService, RuntimeState } from './core/RuntimeService';
-
-// Event system exports
 export type { HDRCanvasEventMap } from './core/EventTypes';
+export type { HDRPlugin, PluginContext } from './core/Plugin';
+export type { RuntimeContext, RuntimeService, RuntimeState } from './core/RuntimeService';
 export type { EventBusOptions } from './core/TypedEventBus';
 export type { ImageEncoder, PixelReadback } from './export';
 export { HDRCanvas } from './HDRCanvas';
@@ -14,7 +12,7 @@ export type { ImageUploadService } from './ImageUploadService';
 export { KeyboardHandler, MouseHandler, TouchHandler } from './interaction';
 export { destroySharedDevice } from './render/gpu-device';
 export type { PixelReadbackService } from './render/PixelReadbackService';
-export type { Renderer, RenderOptions } from './render/Renderer';
+export type { Renderer, RendererService, RenderOptions } from './render/Renderer';
 export type { ResizeService } from './render/ResizeService';
 export { WebGPUReadbackService } from './render/WebGPUReadbackService';
 export type {
@@ -23,13 +21,11 @@ export type {
   DisplayedImageType,
   EncodedImageData,
   ExportAPI,
-  // Export types
   ExportOptions,
   HDRCanvasOptions,
   IHDRCanvas,
   ImageData,
   ImageInfo,
-  // Loading types
   ImageLoader,
   InteractionAPI,
   InteractionOptions,
@@ -46,7 +42,6 @@ export type {
   ToneMappingOperator,
   TouchConfig,
   TransferFunction,
-  // Namespaced API interfaces
   ViewportAPI,
   ViewportConfig,
   ViewportMutation,

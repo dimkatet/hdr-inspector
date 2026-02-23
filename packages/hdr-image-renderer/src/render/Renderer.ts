@@ -5,8 +5,10 @@
  * Enables Dependency Inversion for CanvasCore, UploadService, and ReadbackService.
  *
  * Current implementation: WebGPURenderer
+ * Alternative backends: implement RendererService and pass via HDRCanvasOptions.renderer
  */
 
+import type { RuntimeService } from '../core/RuntimeService';
 import type { ImageData, PixelReadback, RenderState, ViewportState } from '../types';
 
 /**
@@ -45,3 +47,27 @@ export interface Renderer {
   /** Cleanup rendering resources */
   dispose(): void;
 }
+
+/**
+ * Combined interface for custom rendering backends.
+ *
+ * Implements both `Renderer` (rendering API) and `RuntimeService` (lifecycle management).
+ * Pass a custom backend via `HDRCanvasOptions.renderer`.
+ *
+ * @example
+ * class MyWebGLRenderer implements RendererService {
+ *   async initialize() { ... }
+ *   render(options) { ... }
+ *   uploadImage(image) { ... }
+ *   getImageDimensions() { ... }
+ *   readPixels(options) { ... }
+ *   dispose() { ... }
+ *   // RuntimeService lifecycle:
+ *   async init(_ctx) { await this.initialize(); }
+ *   start() {}
+ *   stop() {}
+ * }
+ *
+ * const canvas = new HDRCanvas(element, { renderer: new MyWebGLRenderer() })
+ */
+export type RendererService = Renderer & RuntimeService;

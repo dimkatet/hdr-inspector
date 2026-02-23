@@ -42,6 +42,7 @@ export interface DomainEventMap {
   'render:settingsChanged': {
     settings: RenderState;
   };
+  'render:beforeFrame': Record<string, never>;
   'render:complete': Record<string, never>;
 
   // Canvas/Control events
