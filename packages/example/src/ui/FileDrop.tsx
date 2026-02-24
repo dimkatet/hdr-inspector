@@ -84,7 +84,7 @@ export function FileDrop({ onFileLoaded }: FileDropProps) {
         Choose File
         <input
           type="file"
-          accept=".avif,.jxl,.jpg,.jpeg,.png,.hdr,.pic"
+          accept=".avif,.jxl,.jpg,.jpeg,.png,.hdr,.pic,.exr"
           onChange={handleInputChange}
           style={{ display: 'none' }}
         />

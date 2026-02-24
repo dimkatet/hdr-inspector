@@ -6,8 +6,9 @@
 
 import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
 import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { DecodeError, decodeAuto, detectFormat } from '../decoders';
+import { createWorkerPool, decodeInWorker, detectFormat, type AutoWorkerClient, CodecLoadError } from '@dimkatet/jcodecs-auto';
+// import { decodeAuto, detectFormat, DecodeError } from '../decoders';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { syntheticImages } from '../utils/syntheticImages';
 import { Controls } from './Controls';
 import { FileDrop } from './FileDrop';
@@ -16,6 +17,7 @@ import { HDRInfo } from './HDRInfo';
 import { ImageCanvas } from './ImageCanvas';
 
 function App() {
+  const [decodeClient, setDecodeClient] = useState<AutoWorkerClient | null>(null)
   const [image, setImage] = useState<ImageData | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +36,16 @@ function App() {
   const [isGalleryMode, setIsGalleryMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    console.log('[App] Initializing decode worker pool...');
+    createWorkerPool({ poolSize: 16, preferMT: true, type: 'decoder' }).then(client => {
+      setDecodeClient(client);
+    }).catch(err => {
+      console.error('Failed to initialize decode worker pool:', err);
+      setError('Failed to initialize decode workers');
+    });
+  }, [])
+
   // Detect HDR capabilities on mount
   useEffect(() => {
     const checkHDR = async () => {
@@ -48,25 +60,36 @@ function App() {
   const handleMultipleFiles = useCallback(
     (files: FileList) => {
       setError(null);
-
+      if (!decodeClient) {
+        setError('Decode client is not initialized')
+        return;
+      }
       const fileArray = Array.from(files);
       console.log(`[Gallery] Creating loaders for ${fileArray.length} files...`);
       // Create loader functions for each file (decoding is deferred to Gallery)
+      // @ts-ignore
       const galleryItems: GalleryImage[] = fileArray.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random()}`,
         filename: file.name,
         loader: async () => {
           const arrayBuffer = await file.arrayBuffer();
-          const result = await decodeAuto(arrayBuffer);
-
-          return result.data;
+          const { data, descriptor } = await decodeInWorker(decodeClient, arrayBuffer);
+          
+          return {
+            data,
+            width: descriptor.geometry.width,
+            height: descriptor.geometry.height,
+            channels: descriptor.channels.count,
+            transferFunction: descriptor.transfer?.function,
+            bitDepth: descriptor.numeric.bitDepth,
+          }
         },
       }));
 
       setGalleryImages(galleryItems);
       setIsGalleryMode(true);
     },
-    [decodeAuto]
+    [decodeClient]
   );
 
   const handleFileInputChange = useCallback(
@@ -86,6 +109,11 @@ function App() {
       setError(null);
       setFilename(file.name);
 
+      if (!decodeClient) {
+        setError('Decode client is not initialized')
+        return;
+      }
+
       // Read file as ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
 
@@ -99,14 +127,21 @@ function App() {
 
       // Use auto-decoder for AVIF, JXL, Gainmap, PNG
       console.log('[App] Using auto-decoder for:', format);
-      const result = await decodeAuto(arrayBuffer);
-      console.log(result.data);
-      const imageData = result.data;
-      console.log('[App] Decoded:', result);
-
+      const { data, descriptor } = await decodeInWorker(decodeClient, arrayBuffer);
+      
+      const imageData = {
+        data,
+        width: descriptor.geometry.width,
+        height: descriptor.geometry.height,
+        channels: descriptor.channels.count,
+        transferFunction: descriptor.transfer?.function,
+        bitDepth: descriptor.numeric.bitDepth,
+      }
+      console.log('[App] Decoded:', imageData);
+      // @ts-ignore
       setImage(imageData);
     } catch (err) {
-      if (err instanceof DecodeError) {
+      if (err instanceof CodecLoadError) {
         setError(`Decode error: ${err.message}`);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load image');
@@ -114,7 +149,7 @@ function App() {
       console.error('Load error:', err);
       setImage(null);
     }
-  }, []);
+  }, [decodeClient]);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', color: '#fff' }}>
@@ -141,7 +176,7 @@ function App() {
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".hdr,.pic,.avif,.jxl,.png,.jpg,.jpeg"
+        accept=".hdr,.pic,.avif,.jxl,.png,.jpg,.jpeg,.exr"
         style={{ display: 'none' }}
         onChange={handleFileInputChange}
       />

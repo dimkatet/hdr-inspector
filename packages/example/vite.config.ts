@@ -7,7 +7,12 @@ import wasm from 'vite-plugin-wasm';
 export default defineConfig({
   plugins: [wasm(), topLevelAwait(), react()],
   optimizeDeps: {
-    exclude: ['@dimkatet/jcodecs-avif', '@monogrid/gainmap-js'],
+    exclude: [
+      '@dimkatet/jcodecs-avif',
+      '@dimkatet/jcodecs-exr',
+      '@dimkatet/jcodecs-jxl',
+      '@dimkatet/jcodecs-auto',
+    ],
   },
   worker: {
     format: 'es',

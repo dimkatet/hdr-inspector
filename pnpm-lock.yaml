@@ -41,9 +41,18 @@ importers:
       '@dimkatet/hdr-image-renderer':
         specifier: workspace:*
         version: link:../hdr-image-renderer
+      '@dimkatet/jcodecs-auto':
+        specifier: ^0.5.0
+        version: 0.5.0(@dimkatet/jcodecs-avif@0.6.1(typescript@5.9.3))(@dimkatet/jcodecs-exr@0.1.0)(@dimkatet/jcodecs-jxl@0.3.1(typescript@5.9.3))
       '@dimkatet/jcodecs-avif':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: ^0.6.1
+        version: 0.6.1(typescript@5.9.3)
+      '@dimkatet/jcodecs-exr':
+        specifier: ^0.1.0
+        version: 0.1.0
+      '@dimkatet/jcodecs-jxl':
+        specifier: ^0.3.1
+        version: 0.3.1(typescript@5.9.3)
       react:
         specifier: ^19.2.0
         version: 19.2.3
@@ -242,11 +251,24 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@dimkatet/jcodecs-avif@0.3.0':
-    resolution: {integrity: sha512-jUN4TtnV/eS0Z4pgjYVmMqmokuNwdKVxXyGBGK24OaCIOp3qAgfIo8reOPGyzWawz69TuhmKUZw1qF9986PiIg==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-avif/0.3.0/f7bce047b027febde1d9f789f732044482d55063}
+  '@dimkatet/jcodecs-auto@0.5.0':
+    resolution: {integrity: sha512-5fCjq85W1Y34AvhxB4wwkVB71Uij3GoqQFVg4WSVYIhFYUGIYoUPUOPjoOffNlCSkqDp+ySR2s+RydKY22bYtA==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-auto/0.5.0/86790107f42f58936ef7dc5e09af3cd98e25a21e}
+    peerDependencies:
+      '@dimkatet/jcodecs-avif': 0.6.1
+      '@dimkatet/jcodecs-exr': 0.1.0
+      '@dimkatet/jcodecs-jxl': 0.3.1
 
-  '@dimkatet/jcodecs-core@0.2.0':
-    resolution: {integrity: sha512-UFfDTHxfKKgiZxmc1ClTe1tLP9YQfKdwmGngPRJXOpWgR+JIUWiljfl4LoRONOeg1H5T17toJ803IFnF8rSd7Q==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-core/0.2.0/0cd66e79031b5e1023a1efc861ebd63503868bc1}
+  '@dimkatet/jcodecs-avif@0.6.1':
+    resolution: {integrity: sha512-6su2FJIwSE8IVISCf6GBkOnxdMq7SFjjZGfWfnxBquBtCgC23CQcZyipvIYZjcrZmle3w8r+CGJhS9AS6QEzCA==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-avif/0.6.1/48066ec4d2715f21c3d9cf57dfcdd6b3c976c2bf}
+
+  '@dimkatet/jcodecs-core@0.6.0':
+    resolution: {integrity: sha512-BIHWJuSVuwrUblqmDkEFA8lOyE1cX+NgT9ofnFXpazNUQTlKIDfAsdoRX5psZrV8gahe2l2vnZTsbsY+Eqbu4A==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-core/0.6.0/c405936203caa538ddb1e21761fbaed69db8e5fc}
+
+  '@dimkatet/jcodecs-exr@0.1.0':
+    resolution: {integrity: sha512-RQxtRmeIrkSoWVnPjI7BRgpy6ZH6mEgiWFHNJhuyVKSrg659rSKzZRnseCdxQaxzOEaxmbOonX2VvdXrhQFl+A==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-exr/0.1.0/0cbb75ce6fce5f1fb2254f0c3bb5107b596f0ab9}
+
+  '@dimkatet/jcodecs-jxl@0.3.1':
+    resolution: {integrity: sha512-8KTI9zLhKI0wnIFModkW04NIakgTvmLUEIb/jD4WZ6/5Y33X5dEcHQ4XiPQePpLfhelUrNYCaYTD6mq9wA2aJQ==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-jxl/0.3.1/3f8ae11913011b599bad4db1390c8200cbab501e}
 
   '@esbuild/aix-ppc64@0.27.2':
     resolution: {integrity: sha512-GZMB+a0mOMZs4MpDbj8RJp4cw+w1WV5NYD6xzgvzUJ5Ek2jerwfO2eADyI6ExDSUED+1X8aMbegahsJi+8mgpw==}
@@ -1079,6 +1101,14 @@ packages:
     resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
     hasBin: true
 
+  valibot@1.2.0:
+    resolution: {integrity: sha512-mm1rxUsmOxzrwnX5arGS+U4T25RdvpPjPN4yR0u9pUBov9+zGVtO84tif1eY4r6zWxVxu3KzIyknJy3rxfRZZg==}
+    peerDependencies:
+      typescript: '>=5'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   vite-plugin-top-level-await@1.6.0:
     resolution: {integrity: sha512-bNhUreLamTIkoulCR9aDXbTbhLk6n1YE8NJUTTxl5RYskNRtzOR0ASzSjBVRtNdjIfngDXo11qOsybGLNsrdww==}
     peerDependencies:
@@ -1281,11 +1311,32 @@ snapshots:
   '@biomejs/cli-win32-x64@2.3.15':
     optional: true
 
-  '@dimkatet/jcodecs-avif@0.3.0':
+  '@dimkatet/jcodecs-auto@0.5.0(@dimkatet/jcodecs-avif@0.6.1(typescript@5.9.3))(@dimkatet/jcodecs-exr@0.1.0)(@dimkatet/jcodecs-jxl@0.3.1(typescript@5.9.3))':
     dependencies:
-      '@dimkatet/jcodecs-core': 0.2.0
+      '@dimkatet/jcodecs-avif': 0.6.1(typescript@5.9.3)
+      '@dimkatet/jcodecs-core': 0.6.0
+      '@dimkatet/jcodecs-exr': 0.1.0
+      '@dimkatet/jcodecs-jxl': 0.3.1(typescript@5.9.3)
 
-  '@dimkatet/jcodecs-core@0.2.0': {}
+  '@dimkatet/jcodecs-avif@0.6.1(typescript@5.9.3)':
+    dependencies:
+      '@dimkatet/jcodecs-core': 0.6.0
+      valibot: 1.2.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  '@dimkatet/jcodecs-core@0.6.0': {}
+
+  '@dimkatet/jcodecs-exr@0.1.0':
+    dependencies:
+      '@dimkatet/jcodecs-core': 0.6.0
+
+  '@dimkatet/jcodecs-jxl@0.3.1(typescript@5.9.3)':
+    dependencies:
+      '@dimkatet/jcodecs-core': 0.6.0
+      valibot: 1.2.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
 
   '@esbuild/aix-ppc64@0.27.2':
     optional: true
@@ -1933,6 +1984,10 @@ snapshots:
       picocolors: 1.1.1
 
   uuid@10.0.0: {}
+
+  valibot@1.2.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   vite-plugin-top-level-await@1.6.0(rollup@4.55.2)(vite@7.3.1(@types/node@24.10.9)(lightningcss@1.30.2)):
     dependencies:
