@@ -15,7 +15,7 @@ import type { ImageData, TransferFunction } from '../types';
 export interface ImageAnalysis {
   textureFormat: GPUTextureFormat;
   bytesPerChannel: number;
-  dataType: number; // 0 = Float32, 1 = Uint16, 2 = Uint8
+  dataType: number; // 0 = Float32, 1 = Uint16, 2 = Uint8, 3 = Float16
   bitDepth: number;
   transferFunction: TransferFunction;
   needsPreprocessing: boolean;

@@ -57,6 +57,11 @@ export class GPUImagePreprocessor implements ImagePreprocessor {
       textureFormat = 'rgba32float';
       bytesPerChannel = 4;
       bitDepth = 32;
+    } else if (image.data instanceof Float16Array) {
+      dataType = 3;
+      textureFormat = 'rgba16float';
+      bytesPerChannel = 2;
+      bitDepth = 16;
     } else if (image.data instanceof Uint16Array) {
       dataType = 1;
       textureFormat = 'rgba16unorm';

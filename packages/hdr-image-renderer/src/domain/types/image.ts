@@ -21,8 +21,8 @@ export interface LinearImageData {
   width: number;
   /** Image height in pixels */
   height: number;
-  /** Linear RGB data (Float32Array, interleaved RGB or RGBA) */
-  data: Float32Array;
+  /** Linear RGB data (Float16Array or Float32Array, interleaved RGB or RGBA) */
+  data: Float16Array | Float32Array;
   /** Number of channels (3 for RGB, 4 for RGBA) */
   channels: 3 | 4;
   /** Transfer function (always 'linear' for this type) */

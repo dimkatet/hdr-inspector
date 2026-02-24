@@ -15,7 +15,7 @@ struct PreprocessParams {
   height: u32,
   channels: u32,         // 3 for RGB, 4 for RGBA
   bitDepth: u32,         // 8, 10, 12, or 16
-  dataType: u32,         // 0 = Float32, 1 = Uint16, 2 = Uint8
+  dataType: u32,         // 0 = Float32, 1 = Uint16, 2 = Uint8, 3 = Float16
   rowStrideInU32: u32,   // Output row stride in u32 units (256-byte aligned)
 };
 
@@ -95,6 +95,26 @@ fn preprocess_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     b = remapBitDepth(b, params.bitDepth);
 
     // Output: 2 u16 per u32, row-aligned
+    let outputU32Offset = y * params.rowStrideInU32 + x * 2u;
+    outputData[outputU32Offset]      = r | (g << 16u);
+    outputData[outputU32Offset + 1u] = b | (a << 16u);
+
+  } else if (params.dataType == 3u) {
+    // Float16: 2 f16 per u32 (same byte layout as Uint16, but IEEE 754 half-precision)
+    let inputU16Offset = pixelIdx * params.channels;
+
+    let r = readU16(inputU16Offset);
+    let g = readU16(inputU16Offset + 1u);
+    let b = readU16(inputU16Offset + 2u);
+    var a: u32;
+
+    if (params.channels == 3u) {
+      a = 0x3C00u; // 1.0 in IEEE 754 half-precision
+    } else {
+      a = readU16(inputU16Offset + 3u);
+    }
+
+    // Output: 2 f16 per u32, row-aligned (same packing as Uint16 path)
     let outputU32Offset = y * params.rowStrideInU32 + x * 2u;
     outputData[outputU32Offset]      = r | (g << 16u);
     outputData[outputU32Offset + 1u] = b | (a << 16u);

@@ -234,10 +234,9 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
 
   // Build canvas style
   const canvasStyle: React.CSSProperties = {
-    ...style,
-    cursor: viewportOptions.enabled ? 'grab' : undefined,
     aspectRatio: objectFit === 'auto' ? aspectRatio : style?.aspectRatio,
     outline: 'none', // Remove focus outline for keyboard navigation
+    ...style,
   };
 
   return <canvas ref={canvasRef} className={className} style={canvasStyle} {...rest} />;
