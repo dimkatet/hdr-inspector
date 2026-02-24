@@ -37,7 +37,7 @@ jobs:
         run: pnpm install
 
       - name: Build library
-        run: pnpm --filter @dimkatet/hdr-image-renderer build
+        run: pnpm --filter @dimkatet/hdr-canvas build
 
       - name: Build demo app
         run: pnpm --filter hdr-inspector-demo build

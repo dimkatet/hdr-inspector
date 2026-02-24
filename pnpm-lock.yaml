@@ -38,7 +38,7 @@ importers:
 
   packages/example:
     dependencies:
-      '@dimkatet/hdr-image-renderer':
+      '@dimkatet/hdr-canvas':
         specifier: workspace:*
         version: link:../hdr-image-renderer
       '@dimkatet/jcodecs-auto':
@@ -257,6 +257,13 @@ packages:
       '@dimkatet/jcodecs-avif': 0.6.1
       '@dimkatet/jcodecs-exr': 0.1.0
       '@dimkatet/jcodecs-jxl': 0.3.1
+    peerDependenciesMeta:
+      '@dimkatet/jcodecs-avif':
+        optional: true
+      '@dimkatet/jcodecs-exr':
+        optional: true
+      '@dimkatet/jcodecs-jxl':
+        optional: true
 
   '@dimkatet/jcodecs-avif@0.6.1':
     resolution: {integrity: sha512-6su2FJIwSE8IVISCf6GBkOnxdMq7SFjjZGfWfnxBquBtCgC23CQcZyipvIYZjcrZmle3w8r+CGJhS9AS6QEzCA==, tarball: https://npm.pkg.github.com/download/@dimkatet/jcodecs-avif/0.6.1/48066ec4d2715f21c3d9cf57dfcdd6b3c976c2bf}
@@ -1313,8 +1320,9 @@ snapshots:
 
   '@dimkatet/jcodecs-auto@0.5.0(@dimkatet/jcodecs-avif@0.6.1(typescript@5.9.3))(@dimkatet/jcodecs-exr@0.1.0)(@dimkatet/jcodecs-jxl@0.3.1(typescript@5.9.3))':
     dependencies:
-      '@dimkatet/jcodecs-avif': 0.6.1(typescript@5.9.3)
       '@dimkatet/jcodecs-core': 0.6.0
+    optionalDependencies:
+      '@dimkatet/jcodecs-avif': 0.6.1(typescript@5.9.3)
       '@dimkatet/jcodecs-exr': 0.1.0
       '@dimkatet/jcodecs-jxl': 0.3.1(typescript@5.9.3)
 

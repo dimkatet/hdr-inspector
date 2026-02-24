@@ -8,7 +8,7 @@ import {
   detectHDRCapabilities,
   getCapabilitiesDescription,
   type HDRCapabilities,
-} from '@dimkatet/hdr-image-renderer';
+} from '@dimkatet/hdr-canvas';
 import { useEffect, useState } from 'react';
 
 export function HDRInfo() {

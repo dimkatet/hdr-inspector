@@ -4,8 +4,8 @@
  * Displays multiple HDR images in a grid with async loading support
  */
 
-import type { ImageLoader, LoadingState } from '@dimkatet/hdr-image-renderer';
-import { HDRImage } from '@dimkatet/hdr-image-renderer/react';
+import type { ImageLoader, LoadingState } from '@dimkatet/hdr-canvas';
+import { HDRImage } from '@dimkatet/hdr-canvas/react';
 import { useCallback, useRef, useState } from 'react';
 
 interface GalleryImage {

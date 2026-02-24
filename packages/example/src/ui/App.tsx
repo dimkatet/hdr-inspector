@@ -1,11 +1,11 @@
 /**
  * HDR Inspector - Example App
  *
- * Demonstrates usage of @dimkatet/hdr-image-renderer package
+ * Demonstrates usage of @dimkatet/hdr-canvas package
  */
 
-import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
-import { detectHDRCapabilities } from '@dimkatet/hdr-image-renderer';
+import type { ImageData, RenderState } from '@dimkatet/hdr-canvas';
+import { detectHDRCapabilities } from '@dimkatet/hdr-canvas';
 import { createWorkerPool, decodeInWorker, detectFormat, type AutoWorkerClient, CodecLoadError } from '@dimkatet/jcodecs-auto';
 // import { decodeAuto, detectFormat, DecodeError } from '../decoders';
 import { useCallback, useEffect, useState, useRef } from 'react';
@@ -166,7 +166,7 @@ function App() {
       >
         <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
         <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#888' }}>
-          Multi-format HDR image viewer • Powered by @dimkatet/hdr-image-renderer +
+          Multi-format HDR image viewer • Powered by @dimkatet/hdr-canvas +
           @dimkatet/hdr-decoders
         </p>
       </header>

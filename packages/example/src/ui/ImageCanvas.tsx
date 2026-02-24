@@ -1,11 +1,11 @@
 /**
  * Image Canvas Component
  *
- * Demonstrates usage of @dimkatet/hdr-image-renderer React component
+ * Demonstrates usage of @dimkatet/hdr-canvas React component
  */
 
-import type { ImageData, RenderState } from '@dimkatet/hdr-image-renderer';
-import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react';
+import type { ImageData, RenderState } from '@dimkatet/hdr-canvas';
+import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
 import { useCallback, useRef, useState } from 'react';
 
 interface ImageCanvasProps {

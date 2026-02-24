@@ -4,7 +4,7 @@
  * Generate test patterns for different ImageData formats
  */
 
-import type { EncodedImageData, LinearImageData } from '@dimkatet/hdr-image-renderer';
+import type { EncodedImageData, LinearImageData } from '@dimkatet/hdr-canvas';
 
 /**
  * Generate horizontal gradient (Linear Float32, HDR)

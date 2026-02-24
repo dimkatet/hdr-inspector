@@ -1,4 +1,4 @@
-# @dimkatet/hdr-image-renderer
+# @dimkatet/hdr-canvas
 
 WebGPU-based HDR image renderer with native HDR display support, plugin system, and React integration.
 
@@ -21,9 +21,14 @@ WebGPU-based HDR image renderer with native HDR display support, plugin system, 
 ## Installation
 
 ```bash
-npm install @dimkatet/hdr-image-renderer
-pnpm add @dimkatet/hdr-image-renderer
+npm install @dimkatet/hdr-canvas
+pnpm add @dimkatet/hdr-canvas
 ```
+
+> Published to GitHub Packages. Add to `.npmrc`:
+> ```
+> @dimkatet:registry=https://npm.pkg.github.com
+> ```
 
 ## Browser Requirements
 
@@ -38,7 +43,7 @@ pnpm add @dimkatet/hdr-image-renderer
 ### Vanilla JavaScript
 
 ```typescript
-import { HDRCanvas } from '@dimkatet/hdr-image-renderer'
+import { HDRCanvas } from '@dimkatet/hdr-canvas'
 
 const canvas = document.querySelector('canvas')!
 const hdr = new HDRCanvas(canvas, {
@@ -96,7 +101,7 @@ hdr.destroy()
 ### React
 
 ```tsx
-import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-image-renderer/react'
+import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react'
 import { useRef, useState } from 'react'
 
 function App() {
@@ -279,7 +284,7 @@ hdr.on('viewport:update', handler, { throttle: 16 })
 Plugins extend HDRCanvas without modifying core code.
 
 ```typescript
-import { HDRCanvas, type HDRPlugin, type PluginContext } from '@dimkatet/hdr-image-renderer'
+import { HDRCanvas, type HDRPlugin, type PluginContext } from '@dimkatet/hdr-canvas'
 ```
 
 ### Plugin Interface
@@ -347,7 +352,6 @@ const shortcutPlugin: HDRPlugin = {
 const hdrExportPlugin: HDRPlugin = {
   name: 'hdr-export',
   install(ctx) {
-    // Save reference for later use
     this._export = ctx.services.get('export')
   },
   async exportAsHDR() {
@@ -379,8 +383,8 @@ Plugins are automatically uninstalled on `destroy()` and reinstalled on `restart
 Swap out the default WebGPU renderer with your own implementation:
 
 ```typescript
-import { HDRCanvas, type RendererService } from '@dimkatet/hdr-image-renderer'
-import type { RuntimeContext } from '@dimkatet/hdr-image-renderer'
+import { HDRCanvas, type RendererService } from '@dimkatet/hdr-canvas'
+import type { RuntimeContext } from '@dimkatet/hdr-canvas'
 
 class MyWebGLRenderer implements RendererService {
   // Renderer interface:
@@ -431,7 +435,7 @@ The library accepts two image data formats:
 }
 ```
 
-Decoders are not included — bring your own or use the reference implementations in the example app.
+Decoders are not included — bring your own or use the reference implementations in the [example app](https://github.com/dimkatet/hdr-inspector/tree/master/packages/example).
 
 ---
 

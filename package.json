@@ -13,7 +13,7 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "dev:example": "pnpm --filter hdr-inspector-demo dev",
-    "build:lib": "pnpm --filter @dimkatet/hdr-image-renderer build",
+    "build:lib": "pnpm --filter @dimkatet/hdr-canvas build",
     "deploy": "./scripts/deploy.sh"
   },
   "dependencies": {},
