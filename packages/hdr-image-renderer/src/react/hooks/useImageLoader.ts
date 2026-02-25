@@ -53,12 +53,10 @@ export function useImageLoader(
     onLoadingStateChange,
   } = options;
 
-  const loaderRef = useRef(loader);
   const onLoadRef = useRef(onLoad);
   const onErrorRef = useRef(onError);
   const onLoadingStateChangeRef = useRef(onLoadingStateChange);
 
-  useEffect(() => { loaderRef.current = loader; }, [loader]);
   useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
   useEffect(() => { onLoadingStateChangeRef.current = onLoadingStateChange; }, [onLoadingStateChange]);
@@ -98,17 +96,16 @@ export function useImageLoader(
       });
   }, [image, instance]);
 
-  // Load via async loader
+  // Load via async loader — re-runs when loader identity changes (new photo, etc.)
   useEffect(() => {
-    const currentLoader = loaderRef.current;
-    if (!currentLoader || !instance) return;
+    if (!loader || !instance) return;
 
     const unsubscribe = instance.on('loading:stateChange', ({ state }) =>
       setState(state)
     );
 
     instance.loading
-      .load(currentLoader, { placeholder, errorFallback, timeout })
+      .load(loader, { placeholder, errorFallback, timeout })
       .then((info) => {
         onLoadRef.current?.(info);
       })
@@ -122,7 +119,7 @@ export function useImageLoader(
       unsubscribe();
       try { instance.loading.cancel(); } catch { /* instance may be destroyed */ }
     };
-  }, [instance, placeholder, errorFallback, timeout]);
+  }, [instance, loader, placeholder, errorFallback, timeout]);
 
   return {
     state,

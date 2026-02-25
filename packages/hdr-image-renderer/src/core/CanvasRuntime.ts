@@ -23,6 +23,7 @@ import { CanvasResizer, RenderSettings, WebGPURenderer } from '../render';
 import { setGPUDeviceLogger } from '../render/gpu-device';
 import { WebGPUReadbackService } from '../render/WebGPUReadbackService';
 import type { HDRCanvasOptions } from '../types';
+import { detectHDRCapabilities } from '../utils/hdr-capabilities';
 import { ViewportCommands, ViewportController, ViewportLayoutService } from '../viewport';
 import { WebGPUUploadService } from '../WebGPUUploadService';
 import { ServiceRegistry } from './CanvasCore';
@@ -78,6 +79,8 @@ export class CanvasRuntime {
    */
   async start(): Promise<void> {
     if (!this.kernel.prepareStart()) return;
+
+    await this.resolveConfig();
 
     // Force lazy instantiation of managed services (factories populate managedInstances)
     for (const key of this.registry.getManagedKeys()) {
@@ -341,6 +344,18 @@ export class CanvasRuntime {
       events: this.getEventBus(),
       logger: this.logger,
     };
+  }
+
+  /**
+   * Resolve config fields that require async detection (e.g. hdrMode auto-detect).
+   * Called once at the start of start() before any service is instantiated.
+   */
+  private async resolveConfig(): Promise<void> {
+    if (this.config.renderOptions.hdrMode === undefined) {
+      const caps = await detectHDRCapabilities();
+      this.config.renderOptions.hdrMode = caps.canvasHDR;
+      this.logger.log(`[CanvasRuntime] hdrMode auto-detected: ${caps.canvasHDR}`);
+    }
   }
 
   /**

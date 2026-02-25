@@ -88,7 +88,7 @@ export function normalizeConfig(options: HDRCanvasOptions): CoreConfig {
     renderOptions: {
       exposure: options.exposure ?? 0,
       toneMapping: options.toneMapping ?? 'aces',
-      hdrMode: options.hdrMode ?? false,
+      hdrMode: options.hdrMode, // undefined = auto-detect on start()
       colorSpace: options.colorSpace ?? 'srgb',
       visualizationMode: options.visualizationMode ?? 'rgb',
       objectFit: options.objectFit ?? 'contain',

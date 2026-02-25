@@ -127,12 +127,16 @@ export interface HDRImageProps
   onZoom?: (zoom: number, state: ViewportState) => void;
   /**
    * Object-fit mode for image display.
-   * - 'auto': Adjust canvas aspect-ratio to match image + use contain rendering (replaces fitToImage)
+   * - 'auto': Adjust canvas aspect-ratio to match image + use contain rendering (React-only)
    * - 'contain': Fit entire image within canvas, letterbox/pillarbox as needed (default)
    * - 'cover': Fill canvas completely, crop excess edges
    * - 'fill': Stretch image to fill canvas
    * - 'none': Display at natural size (1:1 pixel mapping), centered
    * - 'scale-down': Like contain but never upscale small images
+   *
+   * When set, takes priority over `options.objectFit`.
+   * Use this prop (not `options.objectFit`) in React — it supports the extra 'auto' mode
+   * and is synced on every render.
    */
   objectFit?: ObjectFit | 'auto';
 }
