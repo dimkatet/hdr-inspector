@@ -68,7 +68,7 @@ export class HDRCanvas implements IHDRCanvas {
 
   constructor(canvas: HTMLCanvasElement, options: HDRCanvasOptions = {}) {
     this.runtime = new CanvasRuntime(canvas, options);
-    const registry =this.runtime.registry;
+    const registry = this.runtime.registry;
 
     // Initialize API namespaces AFTER runtime is created
     // This ensures arrow functions capture the correct core instance during HMR

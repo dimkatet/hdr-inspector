@@ -57,9 +57,15 @@ export function useImageLoader(
   const onErrorRef = useRef(onError);
   const onLoadingStateChangeRef = useRef(onLoadingStateChange);
 
-  useEffect(() => { onLoadRef.current = onLoad; }, [onLoad]);
-  useEffect(() => { onErrorRef.current = onError; }, [onError]);
-  useEffect(() => { onLoadingStateChangeRef.current = onLoadingStateChange; }, [onLoadingStateChange]);
+  useEffect(() => {
+    onLoadRef.current = onLoad;
+  }, [onLoad]);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+  useEffect(() => {
+    onLoadingStateChangeRef.current = onLoadingStateChange;
+  }, [onLoadingStateChange]);
 
   const [state, setState] = useState<LoadingState>(IDLE_STATE);
 
@@ -100,9 +106,7 @@ export function useImageLoader(
   useEffect(() => {
     if (!loader || !instance) return;
 
-    const unsubscribe = instance.on('loading:stateChange', ({ state }) =>
-      setState(state)
-    );
+    const unsubscribe = instance.on('loading:stateChange', ({ state }) => setState(state));
 
     instance.loading
       .load(loader, { placeholder, errorFallback, timeout })
@@ -117,7 +121,11 @@ export function useImageLoader(
 
     return () => {
       unsubscribe();
-      try { instance.loading.cancel(); } catch { /* instance may be destroyed */ }
+      try {
+        instance.loading.cancel();
+      } catch {
+        /* instance may be destroyed */
+      }
     };
   }, [instance, loader, placeholder, errorFallback, timeout]);
 

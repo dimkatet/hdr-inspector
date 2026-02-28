@@ -165,7 +165,9 @@ export function Gallery({ images, onClose }: GalleryProps) {
                   }}
                   onLoad={() => handleLoad(item.id)}
                   onError={(err) => handleError(item.id, err)}
-                  onLoadingStateChange={(state) => handleLoadingStateChange(item.id, state)}
+                  loading={{
+                    onStateChange: (state) => handleLoadingStateChange(item.id, state),
+                  }}
                   style={{
                     display: 'block',
                     height: '400px',

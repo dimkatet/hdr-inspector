@@ -24,7 +24,7 @@ import type {
 export class ImageLoadingManager implements LoadingAPI, RuntimeService {
   private state: LoadingState = { status: 'idle', displayedImage: 'none' };
   private abortController: AbortController | null = null;
-  private runtimeSignal: AbortSignal | null = null;
+  runtimeSignal: AbortSignal | null = null;
 
   constructor(
     private uploadService: ImageUploadService,

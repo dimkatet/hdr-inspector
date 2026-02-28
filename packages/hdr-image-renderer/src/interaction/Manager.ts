@@ -11,10 +11,10 @@ import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
-import type { ViewportFacade } from './ViewportFacade';
 import { KeyboardHandler } from './KeyboardHandler';
 import { MouseHandler } from './MouseHandler';
 import { TouchHandler } from './TouchHandler';
+import type { ViewportFacade } from './ViewportFacade';
 
 interface ZoomCommands {
   zoomIn: () => void;

@@ -76,9 +76,10 @@ export function useViewport(
     }
 
     // Reconstruct config objects from primitives so deps are honest
-    const wheelConfig = wheelSensitivity !== undefined
-      ? { enabled: wheelEnabled, sensitivity: wheelSensitivity }
-      : wheelEnabled;
+    const wheelConfig =
+      wheelSensitivity !== undefined
+        ? { enabled: wheelEnabled, sensitivity: wheelSensitivity }
+        : wheelEnabled;
     const keyboardConfig = keyboardEnabled;
 
     const detachInteractions = instance.interaction.attach({

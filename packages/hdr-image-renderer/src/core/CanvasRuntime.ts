@@ -211,13 +211,15 @@ export class CanvasRuntime {
 
     // Renderer (managed) — use custom backend if provided, otherwise default to WebGPU
     this.registry.registerManaged('renderer', () => {
-      const renderer = this.config.renderer ?? (() => {
-        setGPUDeviceLogger(this.logger);
-        return new WebGPURenderer(this.canvas, {
-          transparent: this.config.transparent,
-          logger: this.logger,
-        });
-      })();
+      const renderer =
+        this.config.renderer ??
+        (() => {
+          setGPUDeviceLogger(this.logger);
+          return new WebGPURenderer(this.canvas, {
+            transparent: this.config.transparent,
+            logger: this.logger,
+          });
+        })();
       this.registry.trackManagedInstance('renderer', renderer);
       return renderer;
     });
@@ -302,10 +304,7 @@ export class CanvasRuntime {
     // Loading (managed)
     this.registry.registerManaged('loading', () => {
       const eventBus = this.registry.get('eventBus');
-      const manager = new ImageLoadingManager(
-        this.registry.get('uploadService'),
-        eventBus
-      );
+      const manager = new ImageLoadingManager(this.registry.get('uploadService'), eventBus);
 
       // Re-render after image upload completes
       eventBus.on('loading:stateChange', ({ state }) => {
@@ -355,7 +354,9 @@ export class CanvasRuntime {
    */
   private async resolveConfig(): Promise<void> {
     this.config = await resolveConfig(this.rawOptions);
-    this.logger.log(`[CanvasRuntime] config resolved: hdrMode=${this.config.renderOptions.hdrMode} colorSpace=${this.config.renderOptions.colorSpace} toneMapping=${this.config.renderOptions.toneMapping}`);
+    this.logger.log(
+      `[CanvasRuntime] config resolved: hdrMode=${this.config.renderOptions.hdrMode} colorSpace=${this.config.renderOptions.colorSpace} toneMapping=${this.config.renderOptions.toneMapping}`
+    );
   }
 
   /**

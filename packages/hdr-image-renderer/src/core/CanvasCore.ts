@@ -36,10 +36,7 @@ export class ServiceRegistry {
    * Register a managed service (implements RuntimeService lifecycle).
    * The registry tracks these for ordered init/start/stop/dispose.
    */
-  registerManaged<K extends keyof ServiceMap>(
-    name: K,
-    factory: () => ServiceMap[K]
-  ): void {
+  registerManaged<K extends keyof ServiceMap>(name: K, factory: () => ServiceMap[K]): void {
     this.register(name, factory);
     this.managedKeys.push(name);
   }

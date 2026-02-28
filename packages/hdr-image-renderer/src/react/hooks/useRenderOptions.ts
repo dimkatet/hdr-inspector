@@ -13,7 +13,8 @@ export function useRenderOptions(
   options: HDRCanvasOptions | undefined,
   objectFitOverride?: ObjectFit
 ): void {
-  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace, objectFit } = options ?? {};
+  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace, objectFit } =
+    options ?? {};
   const resolvedObjectFit = objectFitOverride ?? objectFit;
 
   useEffect(() => {
@@ -25,13 +26,5 @@ export function useRenderOptions(
       colorSpace,
       objectFit: resolvedObjectFit,
     });
-  }, [
-    exposure,
-    toneMapping,
-    hdrMode,
-    visualizationMode,
-    colorSpace,
-    resolvedObjectFit,
-    instance,
-  ]);
+  }, [exposure, toneMapping, hdrMode, visualizationMode, colorSpace, resolvedObjectFit, instance]);
 }

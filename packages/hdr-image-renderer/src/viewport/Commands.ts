@@ -43,7 +43,11 @@ export class ViewportCommands implements ViewportCommandService {
   zoomIn(factor = 2): void {
     const currentZoom = this.target.getState().zoom;
     const newZoom = currentZoom * factor;
-    this.logger.log('[ViewportCommands] zoomIn:', { currentZoom: currentZoom.toFixed(3), factor, newZoom: newZoom.toFixed(3) });
+    this.logger.log('[ViewportCommands] zoomIn:', {
+      currentZoom: currentZoom.toFixed(3),
+      factor,
+      newZoom: newZoom.toFixed(3),
+    });
 
     this.target.applyMutation({
       type: 'zoom',
@@ -59,7 +63,11 @@ export class ViewportCommands implements ViewportCommandService {
   zoomOut(factor = 2): void {
     const currentZoom = this.target.getState().zoom;
     const newZoom = currentZoom / factor;
-    this.logger.log('[ViewportCommands] zoomOut:', { currentZoom: currentZoom.toFixed(3), factor, newZoom: newZoom.toFixed(3) });
+    this.logger.log('[ViewportCommands] zoomOut:', {
+      currentZoom: currentZoom.toFixed(3),
+      factor,
+      newZoom: newZoom.toFixed(3),
+    });
 
     this.target.applyMutation({
       type: 'zoom',
@@ -94,7 +102,12 @@ export class ViewportCommands implements ViewportCommandService {
 
     const objectFit = this.getObjectFit();
     const actualZoom = this.layoutService.computeActualSizeZoom(imageDims, canvasSize, objectFit);
-    this.logger.log('[ViewportCommands] zoomToActual:', { imageDims, canvasSize, objectFit, actualZoom: actualZoom.toFixed(3) });
+    this.logger.log('[ViewportCommands] zoomToActual:', {
+      imageDims,
+      canvasSize,
+      objectFit,
+      actualZoom: actualZoom.toFixed(3),
+    });
 
     this.target.applyMutation({
       type: 'zoom',

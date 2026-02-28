@@ -40,7 +40,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install
         env:
-          # Используй secrets.NPM_TOKEN (твой PAT) или secrets.GITHUB_TOKEN
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build projects
