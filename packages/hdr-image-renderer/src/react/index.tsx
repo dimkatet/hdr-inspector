@@ -96,6 +96,20 @@ export interface HDRImageHandle {
   getCanvas: () => import('../types').IHDRCanvas | null;
 }
 
+/**
+ * Loader behavior config — only relevant when using the `loader` prop.
+ */
+export interface HDRImageLoadingConfig {
+  /** Placeholder image to show while loader is running */
+  placeholder?: ImageData;
+  /** Error fallback image to show if loader fails */
+  errorFallback?: ImageData;
+  /** Timeout in milliseconds for loader (rejects if exceeded) */
+  timeout?: number;
+  /** Callback when loading state changes */
+  onStateChange?: (state: LoadingState) => void;
+}
+
 export interface HDRImageProps
   extends Omit<
     React.CanvasHTMLAttributes<HTMLCanvasElement>,
@@ -105,16 +119,10 @@ export interface HDRImageProps
   image?: ImageData;
   /** Async image loader function. Mutually exclusive with `image`. */
   loader?: ImageLoader;
-  /** Placeholder image to show while loader is running */
-  placeholder?: ImageData;
-  /** Error fallback image to show if loader fails */
-  errorFallback?: ImageData;
-  /** Timeout in milliseconds for loader (rejects if exceeded) */
-  loadingTimeout?: number;
-  /** Callback when loading state changes (only when using loader) */
-  onLoadingStateChange?: (state: LoadingState) => void;
-  /** Render options (exposure, toneMapping, etc.) */
-  options: HDRCanvasOptions;
+  /** Loader behavior config: placeholder, fallback, timeout, state callback. */
+  loading?: HDRImageLoadingConfig;
+  /** Render options (exposure, toneMapping, hdrMode, etc.). All fields are optional — smart defaults applied. */
+  options?: HDRCanvasOptions;
   /** Callback when image loads successfully with image info */
   onLoad?: (info: ImageInfo) => void;
   /** Callback when an error occurs */
@@ -145,10 +153,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   {
     image,
     loader,
-    placeholder,
-    errorFallback,
-    loadingTimeout,
-    onLoadingStateChange,
+    loading,
     options,
     onLoad,
     onError,
@@ -170,7 +175,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   // Merge resolved objectFit into initial options so HDRCanvas starts with the correct value
   // (avoids a first-frame flash where Settings defaults to 'contain' before useRenderOptions fires)
   const initialOptions = useMemo(
-    () => (resolvedObjectFit ? { ...options, objectFit: resolvedObjectFit } : options),
+    () => (resolvedObjectFit ? { ...options, objectFit: resolvedObjectFit } : (options ?? {})),
     [options, resolvedObjectFit]
   );
 
@@ -217,12 +222,12 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   useImageLoader(instance, {
     image,
     loader,
-    placeholder,
-    errorFallback,
-    timeout: loadingTimeout,
+    placeholder: loading?.placeholder,
+    errorFallback: loading?.errorFallback,
+    timeout: loading?.timeout,
     onLoad: handleLoad,
     onError,
-    onLoadingStateChange,
+    onLoadingStateChange: loading?.onStateChange,
   });
 
   // Sync render options (with resolved objectFit)

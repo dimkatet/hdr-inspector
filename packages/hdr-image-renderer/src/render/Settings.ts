@@ -31,10 +31,12 @@ export class RenderSettings implements RenderAPI {
     onChange: () => void,
     private eventBus?: TypedEventBus<DomainEventMap>
   ) {
+    // Safety nets: ConfigResolver fills all values before this constructor runs.
+    // These fallbacks are only reached if Settings is constructed outside of CanvasRuntime.
     this.exposure = options.exposure ?? 0;
-    this.toneMapping = options.toneMapping ?? 'aces';
+    this.toneMapping = options.toneMapping ?? 'reinhard';
     this.hdrMode = options.hdrMode ?? false;
-    this.colorSpace = options.colorSpace ?? 'display-p3';
+    this.colorSpace = options.colorSpace ?? 'srgb';
     this.visualizationMode = options.visualizationMode ?? 'rgb';
     this.objectFit = options.objectFit ?? 'contain';
     this.onChange = onChange;

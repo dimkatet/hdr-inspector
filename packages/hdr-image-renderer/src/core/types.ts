@@ -11,7 +11,6 @@ import type { ResizeService } from '../render/ResizeService';
 import type {
   ColorSpace,
   ExportAPI,
-  HDRCanvasOptions,
   InteractionAPI,
   LoadingAPI,
   ObjectFit,
@@ -25,19 +24,20 @@ import type { DomainEventMap, RuntimeEventMap } from './EventTypes';
 import type { TypedEventBus } from './TypedEventBus';
 
 /**
- * Internal configuration derived from HDRCanvasOptions
+ * Internal configuration derived from HDRCanvasOptions.
+ * All renderOptions fields are required — fully resolved by ConfigResolver before use.
  */
 export interface CoreConfig {
   debug: boolean;
   transparent: boolean;
   renderer?: RendererService;
   renderOptions: {
-    exposure?: number;
-    toneMapping?: ToneMappingOperator;
-    hdrMode?: boolean;
-    colorSpace?: ColorSpace;
-    visualizationMode?: VisualizationMode;
-    objectFit?: ObjectFit;
+    exposure: number;
+    toneMapping: ToneMappingOperator;
+    hdrMode: boolean;
+    colorSpace: ColorSpace;
+    visualizationMode: VisualizationMode;
+    objectFit: ObjectFit;
   };
 }
 
@@ -77,21 +77,3 @@ export interface ServiceMap {
   export: ExportAPI;
 }
 
-/**
- * Convert user options to core config
- */
-export function normalizeConfig(options: HDRCanvasOptions): CoreConfig {
-  return {
-    debug: options.debug ?? false,
-    transparent: options.transparent ?? false,
-    renderer: options.renderer,
-    renderOptions: {
-      exposure: options.exposure ?? 0,
-      toneMapping: options.toneMapping ?? 'aces',
-      hdrMode: options.hdrMode, // undefined = auto-detect on start()
-      colorSpace: options.colorSpace ?? 'srgb',
-      visualizationMode: options.visualizationMode ?? 'rgb',
-      objectFit: options.objectFit ?? 'contain',
-    },
-  };
-}

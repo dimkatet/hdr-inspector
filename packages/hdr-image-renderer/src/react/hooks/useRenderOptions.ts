@@ -10,10 +10,10 @@ import type { HDRCanvasOptions, IHDRCanvas, ObjectFit } from '../../types';
  */
 export function useRenderOptions(
   instance: IHDRCanvas | null,
-  options: HDRCanvasOptions,
+  options: HDRCanvasOptions | undefined,
   objectFitOverride?: ObjectFit
 ): void {
-  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace, objectFit } = options;
+  const { exposure, toneMapping, hdrMode, visualizationMode, colorSpace, objectFit } = options ?? {};
   const resolvedObjectFit = objectFitOverride ?? objectFit;
 
   useEffect(() => {

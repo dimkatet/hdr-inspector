@@ -23,21 +23,23 @@ import { CanvasResizer, RenderSettings, WebGPURenderer } from '../render';
 import { setGPUDeviceLogger } from '../render/gpu-device';
 import { WebGPUReadbackService } from '../render/WebGPUReadbackService';
 import type { HDRCanvasOptions } from '../types';
-import { detectHDRCapabilities } from '../utils/hdr-capabilities';
 import { ViewportCommands, ViewportController, ViewportLayoutService } from '../viewport';
 import { WebGPUUploadService } from '../WebGPUUploadService';
 import { ServiceRegistry } from './CanvasCore';
+import { resolveConfig } from './ConfigResolver';
 import type { DomainEventMap, HDRCanvasEventMap, RuntimeEventMap } from './EventTypes';
 import type { HDRPlugin } from './Plugin';
 import { PluginManager } from './PluginManager';
 import { RuntimeKernel } from './RuntimeKernel';
 import type { RuntimeContext, RuntimeService } from './RuntimeService';
 import { TypedEventBus } from './TypedEventBus';
-import { type CoreConfig, normalizeConfig } from './types';
+import type { CoreConfig } from './types';
 
 export class CanvasRuntime {
   private kernel = new RuntimeKernel();
-  private config: CoreConfig;
+  // config is assigned once in resolveConfig() before any service factory runs
+  private config!: CoreConfig;
+  private readonly rawOptions: HDRCanvasOptions;
   private logger: Logger;
   private pluginManager: PluginManager;
 
@@ -47,8 +49,8 @@ export class CanvasRuntime {
     private canvas: HTMLCanvasElement,
     options: HDRCanvasOptions = {}
   ) {
-    this.config = normalizeConfig(options);
-    this.logger = createLogger(this.config.debug);
+    this.rawOptions = options;
+    this.logger = createLogger(options.debug ?? false);
     this.pluginManager = new PluginManager(this.logger);
     this.registry = new ServiceRegistry();
     this.bootstrap();
@@ -347,15 +349,13 @@ export class CanvasRuntime {
   }
 
   /**
-   * Resolve config fields that require async detection (e.g. hdrMode auto-detect).
-   * Called once at the start of start() before any service is instantiated.
+   * Resolve raw user options into a fully-populated CoreConfig.
+   * Called once in start() before any service factory is invoked.
+   * After this, this.config is guaranteed to be complete.
    */
   private async resolveConfig(): Promise<void> {
-    if (this.config.renderOptions.hdrMode === undefined) {
-      const caps = await detectHDRCapabilities();
-      this.config.renderOptions.hdrMode = caps.canvasHDR;
-      this.logger.log(`[CanvasRuntime] hdrMode auto-detected: ${caps.canvasHDR}`);
-    }
+    this.config = await resolveConfig(this.rawOptions);
+    this.logger.log(`[CanvasRuntime] config resolved: hdrMode=${this.config.renderOptions.hdrMode} colorSpace=${this.config.renderOptions.colorSpace} toneMapping=${this.config.renderOptions.toneMapping}`);
   }
 
   /**
