@@ -12,22 +12,25 @@ jobs:
     permissions:
       contents: read
       packages: write
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+          scope: '@dimkatet'
 
       - name: Install dependencies
         run: pnpm install --filter @dimkatet/hdr-canvas...
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Build library
         run: pnpm --filter @dimkatet/hdr-canvas build
