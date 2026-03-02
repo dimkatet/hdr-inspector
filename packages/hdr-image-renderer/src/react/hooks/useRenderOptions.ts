@@ -33,7 +33,8 @@ export function useRenderOptions(
     if (hdrMode !== undefined && hdrMode !== current.hdrMode) updates.hdrMode = hdrMode;
     if (visualizationMode !== undefined && visualizationMode !== current.visualizationMode)
       updates.visualizationMode = visualizationMode;
-    if (colorSpace !== undefined && colorSpace !== current.colorSpace) updates.colorSpace = colorSpace;
+    if (colorSpace !== undefined && colorSpace !== current.colorSpace)
+      updates.colorSpace = colorSpace;
     if (resolvedObjectFit !== undefined && resolvedObjectFit !== current.objectFit)
       updates.objectFit = resolvedObjectFit;
 

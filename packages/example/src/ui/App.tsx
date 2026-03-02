@@ -147,7 +147,7 @@ function App() {
         const decoding = decodeInWorker(decodeClient, arrayBuffer);
         // Wrap in a loader function so the raw Float32Array/Uint16Array never enters
         // React state — prevents React DevTools from serializing large typed arrays in dev mode.
-        
+
         setImageLoader(
           // @ts-expect-error
           () => () =>
@@ -159,7 +159,7 @@ function App() {
               transferFunction: descriptor.transfer?.function,
               bitDepth: descriptor.numeric.bitDepth,
               colorPrimaries: descriptor.color?.primaries, // need mapping
-            })),
+            }))
         );
       } catch (err) {
         if (err instanceof CodecLoadError) {
@@ -182,28 +182,23 @@ function App() {
     },
     [handleFileLoaded]
   );
-  
+
   return (
-    <div
-      style={{ minHeight: "100vh", backgroundColor: "#0d0d0d", color: "#fff" }}
-    >
+    <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', color: '#fff' }}>
       {/* HDR Capabilities Info */}
       <HDRInfo />
 
       {/* Header */}
       <header
         style={{
-          padding: "16px 24px",
-          backgroundColor: "#1a1a1a",
-          borderBottom: "1px solid #333",
+          padding: '16px 24px',
+          backgroundColor: '#1a1a1a',
+          borderBottom: '1px solid #333',
         }}
       >
-        <h1 style={{ margin: 0, fontSize: "24px", fontWeight: "bold" }}>
-          HDR Inspector
-        </h1>
-        <p style={{ margin: "4px 0 0", fontSize: "14px", color: "#888" }}>
-          Multi-format HDR image viewer • Powered by @dimkatet/hdr-canvas +
-          @dimkatet/hdr-decoders
+        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>HDR Inspector</h1>
+        <p style={{ margin: '4px 0 0', fontSize: '14px', color: '#888' }}>
+          Multi-format HDR image viewer • Powered by @dimkatet/hdr-canvas + @dimkatet/hdr-decoders
         </p>
       </header>
 
@@ -213,7 +208,7 @@ function App() {
         type="file"
         multiple
         accept=".hdr,.pic,.avif,.jxl,.png,.jpg,.jpeg,.exr"
-        style={{ display: "none" }}
+        style={{ display: 'none' }}
         onChange={handleFileInputChange}
       />
 
@@ -222,12 +217,12 @@ function App() {
         ref={singleFileInputRef}
         type="file"
         accept=".hdr,.pic,.avif,.jxl,.png,.jpg,.jpeg,.exr"
-        style={{ display: "none" }}
+        style={{ display: 'none' }}
         onChange={handleSingleFileInputChange}
       />
 
       {/* Main Content */}
-      <main style={{ padding: "24px", margin: "0 auto" }}>
+      <main style={{ padding: '24px', margin: '0 auto' }}>
         {isGalleryMode ? (
           /* Gallery Mode */
           <Gallery
@@ -244,18 +239,18 @@ function App() {
             {/* Load Multiple Button */}
             <div
               style={{
-                marginTop: "24px",
-                padding: "24px",
-                backgroundColor: "#1a1a1a",
-                borderRadius: "8px",
-                border: "1px solid #333",
+                marginTop: '24px',
+                padding: '24px',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                border: '1px solid #333',
               }}
             >
               <h3
                 style={{
-                  margin: "0 0 16px",
-                  fontSize: "16px",
-                  fontWeight: "bold",
+                  margin: '0 0 16px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
                 }}
               >
                 Performance Test:
@@ -264,81 +259,79 @@ function App() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 style={{
-                  padding: "12px 24px",
-                  backgroundColor: "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: "bold",
+                  padding: '12px 24px',
+                  backgroundColor: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
                 }}
               >
                 Load Multiple Images
               </button>
-              <p
-                style={{ margin: "12px 0 0", fontSize: "13px", color: "#666" }}
-              >
-                Select multiple HDR images to display in a gallery grid (for
-                WebGPU performance testing)
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#666' }}>
+                Select multiple HDR images to display in a gallery grid (for WebGPU performance
+                testing)
               </p>
             </div>
 
             {/* Synthetic Test Patterns */}
             <div
               style={{
-                marginTop: "24px",
-                padding: "24px",
-                backgroundColor: "#1a1a1a",
-                borderRadius: "8px",
-                border: "1px solid #333",
+                marginTop: '24px',
+                padding: '24px',
+                backgroundColor: '#1a1a1a',
+                borderRadius: '8px',
+                border: '1px solid #333',
               }}
             >
               <h3
                 style={{
-                  margin: "0 0 16px",
-                  fontSize: "16px",
-                  fontWeight: "bold",
+                  margin: '0 0 16px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
                 }}
               >
                 Or try synthetic test patterns:
               </h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
                 {[
                   {
                     generator: syntheticImages.linearGradient,
-                    label: "Linear Gradient (HDR)",
-                    description: "Linear Gradient (Float32, HDR 0-10)",
+                    label: 'Linear Gradient (HDR)',
+                    description: 'Linear Gradient (Float32, HDR 0-10)',
                   },
                   {
                     generator: syntheticImages.rgbGradient,
-                    label: "RGB Gradient (Uint8)",
-                    description: "RGB Gradient (Uint8, sRGB)",
+                    label: 'RGB Gradient (Uint8)',
+                    description: 'RGB Gradient (Uint8, sRGB)',
                   },
                   {
                     generator: syntheticImages.radialHDR,
-                    label: "Radial HDR",
-                    description: "Radial HDR (Float32, 0-50 range)",
+                    label: 'Radial HDR',
+                    description: 'Radial HDR (Float32, 0-50 range)',
                   },
                   {
                     generator: syntheticImages.checkerboard,
-                    label: "Checkerboard",
-                    description: "Checkerboard (Uint8, sRGB)",
+                    label: 'Checkerboard',
+                    description: 'Checkerboard (Uint8, sRGB)',
                   },
                   {
                     generator: syntheticImages.spectrum16,
-                    label: "Spectrum (Uint16)",
-                    description: "Color Spectrum (Uint16, sRGB)",
+                    label: 'Spectrum (Uint16)',
+                    description: 'Color Spectrum (Uint16, sRGB)',
                   },
                   {
                     generator: syntheticImages.pqGradient,
-                    label: "PQ Gradient (HDR10)",
-                    description: "PQ Gradient (Uint16, PQ 0-1000 nits)",
+                    label: 'PQ Gradient (HDR10)',
+                    description: 'PQ Gradient (Uint16, PQ 0-1000 nits)',
                   },
                   {
                     generator: syntheticImages.pqSunset,
-                    label: "PQ Sunset (HDR10)",
-                    description: "PQ Sunset (Uint16, PQ up to 4000 nits)",
+                    label: 'PQ Sunset (HDR10)',
+                    description: 'PQ Sunset (Uint16, PQ up to 4000 nits)',
                   },
                 ].map((pattern) => (
                   <button
@@ -350,42 +343,38 @@ function App() {
                       setFilename(pattern.description);
                     }}
                     style={{
-                      padding: "10px 16px",
-                      backgroundColor: "#2a2a2a",
-                      color: "#fff",
-                      border: "1px solid #444",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      fontSize: "14px",
+                      padding: '10px 16px',
+                      backgroundColor: '#2a2a2a',
+                      color: '#fff',
+                      border: '1px solid #444',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
                     }}
                   >
                     {pattern.label}
                   </button>
                 ))}
               </div>
-              <p
-                style={{ margin: "12px 0 0", fontSize: "13px", color: "#666" }}
-              >
-                Test different ImageData formats: Float32 (linear HDR), Uint8
-                (sRGB), Uint16 (sRGB/PQ)
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#666' }}>
+                Test different ImageData formats: Float32 (linear HDR), Uint8 (sRGB), Uint16
+                (sRGB/PQ)
               </p>
             </div>
           </>
         ) : (
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 320px",
-              gap: "24px",
+              display: 'grid',
+              gridTemplateColumns: '1fr 320px',
+              gap: '24px',
             }}
           >
             {/* Image Viewer */}
             <div>
               {filename && (
-                <div style={{ marginBottom: "16px" }}>
-                  <h2 style={{ margin: "0 0 4px", fontSize: "18px" }}>
-                    {filename}
-                  </h2>
+                <div style={{ marginBottom: '16px' }}>
+                  <h2 style={{ margin: '0 0 4px', fontSize: '18px' }}>{filename}</h2>
                   {/* <p style={{ margin: 0, fontSize: '14px', color: '#888' }}>
                     {image.width} × {image.height} px ({image.channels} channels)
                   </p> */}
@@ -401,28 +390,31 @@ function App() {
                   type="button"
                   onClick={() => singleFileInputRef.current?.click()}
                   style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#2563eb",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "14px",
+                    padding: '8px 16px',
+                    backgroundColor: '#2563eb',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
                   }}
                 >
                   Load New Image
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setImageLoader(undefined); setRenderOptions({}); }}
+                  onClick={() => {
+                    setImageLoader(undefined);
+                    setRenderOptions({});
+                  }}
                   style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#333",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontSize: "14px",
+                    padding: '8px 16px',
+                    backgroundColor: '#333',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
                   }}
                 >
                   Back to Start
@@ -447,12 +439,12 @@ function App() {
         {error && (
           <div
             style={{
-              marginTop: "16px",
-              padding: "16px",
-              backgroundColor: "#331111",
-              border: "1px solid #882222",
-              borderRadius: "4px",
-              color: "#ff6666",
+              marginTop: '16px',
+              padding: '16px',
+              backgroundColor: '#331111',
+              border: '1px solid #882222',
+              borderRadius: '4px',
+              color: '#ff6666',
             }}
           >
             <strong>Error:</strong> {error}
@@ -463,17 +455,16 @@ function App() {
       {/* Footer */}
       <footer
         style={{
-          padding: "16px 24px",
-          textAlign: "center",
-          fontSize: "12px",
-          color: "#666",
-          borderTop: "1px solid #333",
-          marginTop: "40px",
+          padding: '16px 24px',
+          textAlign: 'center',
+          fontSize: '12px',
+          color: '#666',
+          borderTop: '1px solid #333',
+          marginTop: '40px',
         }}
       >
         <p style={{ margin: 0 }}>
-          Linear, scene-referred HDR processing • BT.709 color space • No
-          implicit transforms
+          Linear, scene-referred HDR processing • BT.709 color space • No implicit transforms
         </p>
       </footer>
     </div>

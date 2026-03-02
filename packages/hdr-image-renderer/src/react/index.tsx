@@ -242,7 +242,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
 
     instance.control.forceRender();
   }, [aspectRatio, instance]);
-  
+
   // Load image (supports both direct ImageData and async loader)
   useImageLoader(instance, {
     image,
