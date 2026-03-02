@@ -39,6 +39,19 @@ export interface CoreConfig {
     visualizationMode: VisualizationMode;
     objectFit: ObjectFit;
   };
+  /**
+   * Render-state fields explicitly provided by the user in HDRCanvasOptions.
+   * Used to initialize SettingsController's userState so user intent survives
+   * applyImageDefaults() calls on image load.
+   */
+  userRenderOptions: {
+    exposure?: number;
+    toneMapping?: ToneMappingOperator;
+    hdrMode?: boolean;
+    colorSpace?: ColorSpace;
+    visualizationMode?: VisualizationMode;
+    objectFit?: ObjectFit;
+  };
 }
 
 /**

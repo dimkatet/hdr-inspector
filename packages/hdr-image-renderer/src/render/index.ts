@@ -4,6 +4,7 @@
 
 export { GPUImagePreprocessor } from './GPUImagePreprocessor';
 export type { ImageAnalysis, ImagePreprocessor, PreprocessedImage } from './ImagePreprocessor';
+export { deriveImageDefaults } from './imageDefaults';
 export type { PixelReadbackService } from './PixelReadbackService';
 export type { PixelReader, PixelValue } from './PixelReader';
 export { GPUPixelReader } from './PixelReader';

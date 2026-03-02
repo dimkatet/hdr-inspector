@@ -17,6 +17,7 @@ export type { ResizeService } from './render/ResizeService';
 export { WebGPUReadbackService } from './render/WebGPUReadbackService';
 export type {
   CanvasAPI,
+  ColorPrimaries,
   ColorSpace,
   DisplayedImageType,
   EncodedImageData,

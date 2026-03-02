@@ -99,6 +99,9 @@ export class HDRCanvas implements IHDRCanvas {
       setVisualizationMode: (mode) => registry.get('settings').setVisualizationMode(mode),
       setObjectFit: (mode) => registry.get('settings').setObjectFit(mode),
       updateOptions: (options) => registry.get('settings').updateOptions(options),
+      applyImageDefaults: (derived) => registry.get('settings').applyImageDefaults(derived),
+      resetField: (field) => registry.get('settings').resetField(field),
+      getSettingSource: (field) => registry.get('settings').getSettingSource(field),
     };
 
     this.interaction = {

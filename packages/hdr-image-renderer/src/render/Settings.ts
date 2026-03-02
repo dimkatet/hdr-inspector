@@ -1,8 +1,12 @@
 /**
  * RenderSettings - Render option management
  *
- * Encapsulates render state (exposure, tone mapping, HDR mode, etc.)
- * with change notification for re-rendering.
+ * Maintains two layers of state:
+ * - autoState: system-derived values (hardware detection, image metadata)
+ * - userState: fields explicitly set by the user at runtime
+ *
+ * Effective state = { ...autoState, ...userState } — user always wins.
+ * applyImageDefaults() updates only autoState, leaving user overrides intact.
  */
 
 import type { DomainEventMap } from '../core/EventTypes';
@@ -18,112 +22,122 @@ import type {
 } from '../types';
 
 export class RenderSettings implements RenderAPI {
-  private exposure: number;
-  private toneMapping: ToneMappingOperator;
-  private hdrMode: boolean;
-  private colorSpace: ColorSpace;
-  private visualizationMode: VisualizationMode;
-  private objectFit: ObjectFit;
+  private autoState: RenderState;
+  private userState: Partial<RenderState>;
   private onChange: () => void;
 
+  /**
+   * @param autoState  - Fully resolved initial state (from ConfigResolver / hardware detection)
+   * @param userOptions - Fields explicitly provided by the user in HDRCanvasOptions
+   * @param onChange   - Callback to trigger re-render
+   * @param eventBus   - Optional event bus for change notifications
+   */
   constructor(
-    options: HDRCanvasOptions,
+    autoState: RenderState,
+    userOptions: Partial<RenderState>,
     onChange: () => void,
     private eventBus?: TypedEventBus<DomainEventMap>
   ) {
-    // Safety nets: ConfigResolver fills all values before this constructor runs.
-    // These fallbacks are only reached if Settings is constructed outside of CanvasRuntime.
-    this.exposure = options.exposure ?? 0;
-    this.toneMapping = options.toneMapping ?? 'reinhard';
-    this.hdrMode = options.hdrMode ?? false;
-    this.colorSpace = options.colorSpace ?? 'srgb';
-    this.visualizationMode = options.visualizationMode ?? 'rgb';
-    this.objectFit = options.objectFit ?? 'contain';
+    this.autoState = autoState;
+    this.userState = { ...userOptions };
     this.onChange = onChange;
   }
 
+  // ============================================================
+  // State access
+  // ============================================================
+
   /**
-   * Get current render state
+   * Get effective render state: userState overrides autoState field-by-field.
    */
   getState(): RenderState {
-    return {
-      exposure: this.exposure,
-      toneMapping: this.toneMapping,
-      hdrMode: this.hdrMode,
-      colorSpace: this.colorSpace,
-      visualizationMode: this.visualizationMode,
-      objectFit: this.objectFit,
-    };
+    return { ...this.autoState, ...this.userState };
   }
 
   /**
-   * Notify about render settings change
-   * Calls onChange callback and emits event via EventBus
+   * Returns whether a field is user-controlled or auto-detected.
+   * 'user' means the field has an explicit user override.
+   * 'auto' means the field comes from hardware detection or image metadata.
    */
-  private notifyChange(): void {
-    this.onChange(); // Internal re-render
-    this.eventBus?.emit('render:settingsChanged', { settings: this.getState() });
+  getSettingSource(field: keyof RenderState): 'user' | 'auto' {
+    return field in this.userState ? 'user' : 'auto';
   }
 
-  /**
-   * Set exposure value in stops (EV)
-   */
+  // ============================================================
+  // User setters — write to userState
+  // ============================================================
+
   setExposure(ev: number): void {
-    this.exposure = ev;
+    this.userState.exposure = ev;
     this.notifyChange();
   }
 
-  /**
-   * Set tone mapping operator
-   */
   setToneMapping(operator: ToneMappingOperator): void {
-    this.toneMapping = operator;
+    this.userState.toneMapping = operator;
     this.notifyChange();
   }
 
-  /**
-   * Enable/disable HDR mode
-   */
   setHDRMode(enabled: boolean): void {
-    this.hdrMode = enabled;
+    this.userState.hdrMode = enabled;
     this.notifyChange();
   }
 
-  /**
-   * Set color space for output
-   */
   setColorSpace(colorSpace: ColorSpace): void {
-    this.colorSpace = colorSpace;
+    this.userState.colorSpace = colorSpace;
     this.notifyChange();
   }
 
-  /**
-   * Set visualization mode
-   */
   setVisualizationMode(mode: VisualizationMode): void {
-    this.visualizationMode = mode;
+    this.userState.visualizationMode = mode;
     this.notifyChange();
   }
 
-  /**
-   * Set object-fit mode
-   */
   setObjectFit(mode: ObjectFit): void {
-    this.objectFit = mode;
+    this.userState.objectFit = mode;
     this.notifyChange();
   }
 
   /**
-   * Batch update render options (single onChange call)
+   * Batch update render options. All provided fields go to userState.
    */
   updateOptions(options: Partial<HDRCanvasOptions>): void {
-    if (options.exposure !== undefined) this.exposure = options.exposure;
-    if (options.toneMapping !== undefined) this.toneMapping = options.toneMapping;
-    if (options.hdrMode !== undefined) this.hdrMode = options.hdrMode;
-    if (options.colorSpace !== undefined) this.colorSpace = options.colorSpace;
-    if (options.visualizationMode !== undefined) this.visualizationMode = options.visualizationMode;
-    if (options.objectFit !== undefined) this.objectFit = options.objectFit;
-
+    if (options.exposure !== undefined) this.userState.exposure = options.exposure;
+    if (options.toneMapping !== undefined) this.userState.toneMapping = options.toneMapping;
+    if (options.hdrMode !== undefined) this.userState.hdrMode = options.hdrMode;
+    if (options.colorSpace !== undefined) this.userState.colorSpace = options.colorSpace;
+    if (options.visualizationMode !== undefined)
+      this.userState.visualizationMode = options.visualizationMode;
+    if (options.objectFit !== undefined) this.userState.objectFit = options.objectFit;
     this.notifyChange();
+  }
+
+  // ============================================================
+  // System API — called by CanvasRuntime / ImageLoadingManager
+  // ============================================================
+
+  /**
+   * Apply image-derived defaults to autoState.
+   * Fields already in userState are not affected — user overrides survive image changes.
+   */
+  applyImageDefaults(derived: Partial<RenderState>): void {
+    this.autoState = { ...this.autoState, ...derived };
+    this.notifyChange();
+  }
+
+  /**
+   * Remove a user override, returning the field to its auto-detected value.
+   */
+  resetField(field: keyof RenderState): void {
+    delete this.userState[field];
+    this.notifyChange();
+  }
+
+  // ============================================================
+  // Private
+  // ============================================================
+
+  private notifyChange(): void {
+    this.onChange();
+    this.eventBus?.emit('render:settingsChanged', { settings: this.getState() });
   }
 }

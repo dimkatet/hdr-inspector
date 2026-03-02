@@ -14,6 +14,7 @@ export type { EventBusOptions } from './core/TypedEventBus';
 export type {
   // Canvas domain
   CanvasAPI,
+  ColorPrimaries,
   ColorSpace,
   DisplayedImageType,
   // Viewport domain

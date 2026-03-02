@@ -17,6 +17,7 @@ export type {
 export type { IHDRCanvas } from './hdr-canvas';
 // Image domain
 export type {
+  ColorPrimaries,
   EncodedImageData,
   ImageData,
   ImageInfo,

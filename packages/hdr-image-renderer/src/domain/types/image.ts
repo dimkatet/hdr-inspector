@@ -11,6 +11,25 @@
 export type TransferFunction = 'linear' | 'srgb' | 'pq';
 
 /**
+ * Color primaries (gamut) of the image source.
+ * Used for source gamut tracking and future gamut mapping (source → display).
+ */
+export type ColorPrimaries =
+  | 'bt709' // sRGB, Rec.709 (HDTV)
+  | 'bt2020' // Rec.2020 (UHDTV, wide gamut)
+  | 'display-p3' // Display P3 (Apple displays)
+  | 'dci-p3' // DCI P3 (digital cinema)
+  | 'bt470m' // NTSC (1953)
+  | 'bt470bg' // PAL/SECAM
+  | 'bt601' // SDTV (standard definition)
+  | 'smpte240' // SMPTE 240M
+  | 'generic-film'
+  | 'xyz' // CIE XYZ
+  | 'ebu3213' // EBU Tech 3213
+  | 'aces' // ACES AP0 (Academy Color Encoding System)
+  | 'acescg'; // ACES AP1 (ACEScg working space)
+
+/**
  * Linear RGB image data
  * - Scene-referred, no transfer function applied
  * - Values may exceed 1.0
@@ -27,11 +46,8 @@ export interface LinearImageData {
   channels: 3 | 4;
   /** Transfer function (always 'linear' for this type) */
   transferFunction: 'linear';
-  /** Optional metadata */
-  metadata?: {
-    exposure?: number;
-    colorSpace?: string;
-  };
+  /** Source color primaries / gamut, if known */
+  colorPrimaries?: ColorPrimaries;
 }
 
 /**
@@ -58,10 +74,6 @@ export interface EncodedImageData {
    * If not specified, assumes full bit depth (8 for Uint8Array, 16 for Uint16Array)
    */
   bitDepth?: 8 | 10 | 12 | 16;
-  /** Optional metadata */
-  metadata?: {
-    colorSpace?: string;
-  };
 }
 
 /**
@@ -79,4 +91,6 @@ export interface ImageInfo {
   height: number;
   /** Aspect ratio (width / height) */
   aspectRatio: number;
+  /** Source color primaries, if known — preserved for future gamut mapping decisions */
+  colorPrimaries?: ColorPrimaries;
 }

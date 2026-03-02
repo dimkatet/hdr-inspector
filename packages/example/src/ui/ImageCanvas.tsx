@@ -4,16 +4,17 @@
  * Demonstrates usage of @dimkatet/hdr-canvas React component
  */
 
-import type { ImageData, RenderState } from '@dimkatet/hdr-canvas';
+import type { ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
 import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
 import { useCallback, useRef, useState } from 'react';
 
 interface ImageCanvasProps {
-  image: ImageData | null;
-  renderState: RenderState;
+  loader?: ImageLoader;
+  options?: Partial<RenderState>;
+  onRenderStateSync?: (state: RenderState) => void;
 }
 
-export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
+export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -26,7 +27,11 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
 
   const handleLoad = useCallback(() => {
     setError(null);
-  }, []);
+    const effectiveState = hdrRef.current?.getCanvas()?.render.getState();
+    if (effectiveState) {
+      onRenderStateSync?.(effectiveState);
+    }
+  }, [onRenderStateSync]);
   const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
 
   const handleExport = useCallback(async () => {
@@ -82,15 +87,17 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
       </div>
     );
   }
+  if (!loader) return null;
   return (
     <div>
       <HDRImage
         ref={hdrRef}
         objectFit="auto"
-        image={image ?? undefined}
+        loader={loader}
         options={{
-          ...renderState,
+          ...options,
           transparent: true,
+          debug: true,
         }}
         onLoad={handleLoad}
         onError={handleError}
@@ -143,7 +150,14 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
         </button>
 
         {/* Separator */}
-        <div style={{ width: '1px', height: '24px', backgroundColor: '#555', margin: '0 4px' }} />
+        <div
+          style={{
+            width: '1px',
+            height: '24px',
+            backgroundColor: '#555',
+            margin: '0 4px',
+          }}
+        />
 
         {/* Export button */}
         <button
@@ -156,7 +170,7 @@ export function ImageCanvas({ image, renderState }: ImageCanvasProps) {
             minWidth: '100px',
           }}
           onClick={handleExport}
-          disabled={exporting || !image}
+          disabled={exporting}
         >
           {exporting ? 'Exporting...' : 'Export PNG'}
         </button>

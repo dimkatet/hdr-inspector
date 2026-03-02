@@ -106,6 +106,25 @@ export class ServiceRegistry {
     this.managedKeys = [];
     this.managedInstances = [];
   }
+
+  /**
+   * Clear only runtime services, preserving the given core service keys.
+   * Called on stop() to allow restart without re-bootstrapping core infrastructure.
+   */
+  clearRuntime(coreKeys: ReadonlyArray<string>): void {
+    const coreSet = new Set(coreKeys);
+
+    for (const key of Array.from(this.services.keys())) {
+      if (!coreSet.has(key)) this.services.delete(key);
+    }
+    for (const key of Array.from(this.factories.keys())) {
+      if (!coreSet.has(key)) this.factories.delete(key);
+    }
+
+    // Managed services are always runtime services — clear all
+    this.managedKeys = [];
+    this.managedInstances = [];
+  }
 }
 
 /** @deprecated Use ServiceRegistry instead */

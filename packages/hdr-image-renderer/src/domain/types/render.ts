@@ -97,4 +97,19 @@ export interface RenderAPI {
   setObjectFit(mode: ObjectFit): void;
   /** Batch update multiple render options */
   updateOptions(options: Partial<HDRCanvasOptions>): void;
+  /**
+   * Apply image-derived defaults to auto state.
+   * User overrides (set via setters) are not affected.
+   * Called automatically on image load when image carries metadata.
+   */
+  applyImageDefaults(derived: Partial<RenderState>): void;
+  /**
+   * Reset a field back to its auto-detected value by removing the user override.
+   */
+  resetField(field: keyof RenderState): void;
+  /**
+   * Returns whether a field is user-controlled or auto-detected.
+   * Useful for showing reset buttons in UI.
+   */
+  getSettingSource(field: keyof RenderState): 'user' | 'auto';
 }

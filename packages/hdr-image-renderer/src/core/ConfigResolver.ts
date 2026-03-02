@@ -38,5 +38,15 @@ export async function resolveConfig(options: HDRCanvasOptions): Promise<CoreConf
       visualizationMode: options.visualizationMode ?? 'rgb',
       objectFit: options.objectFit ?? 'contain',
     },
+    userRenderOptions: {
+      ...(options.exposure !== undefined && { exposure: options.exposure }),
+      ...(options.toneMapping !== undefined && { toneMapping: options.toneMapping }),
+      ...(options.hdrMode !== undefined && { hdrMode: options.hdrMode }),
+      ...(options.colorSpace !== undefined && { colorSpace: options.colorSpace }),
+      ...(options.visualizationMode !== undefined && {
+        visualizationMode: options.visualizationMode,
+      }),
+      ...(options.objectFit !== undefined && { objectFit: options.objectFit }),
+    },
   };
 }

@@ -7,6 +7,10 @@
  * - Error boundary (rollback on init failure)
  * - Render coordination
  *
+ * Bootstrap phases:
+ *   constructor → bootstrapCore()     // eventBus, logger — environment-independent, survive restart
+ *   start()     → bootstrapRuntime()  // renderer, settings, viewport, etc. — needs resolved config
+ *
  * Architecture:
  *   HDRCanvas (Facade)
  *     → CanvasRuntime (Orchestration)
@@ -21,6 +25,7 @@ import { InteractionManager } from '../interaction';
 import { createLogger, type Logger } from '../logger';
 import { CanvasResizer, RenderSettings, WebGPURenderer } from '../render';
 import { setGPUDeviceLogger } from '../render/gpu-device';
+import { deriveImageDefaults } from '../render/imageDefaults';
 import { WebGPUReadbackService } from '../render/WebGPUReadbackService';
 import type { HDRCanvasOptions } from '../types';
 import { ViewportCommands, ViewportController, ViewportLayoutService } from '../viewport';
@@ -33,17 +38,26 @@ import { PluginManager } from './PluginManager';
 import { RuntimeKernel } from './RuntimeKernel';
 import type { RuntimeContext, RuntimeService } from './RuntimeService';
 import { TypedEventBus } from './TypedEventBus';
-import type { CoreConfig } from './types';
+import type { CoreConfig, ServiceMap } from './types';
 
 export class CanvasRuntime {
   private kernel = new RuntimeKernel();
-  // config is assigned once in resolveConfig() before any service factory runs
-  private config!: CoreConfig;
   private readonly rawOptions: HDRCanvasOptions;
   private logger: Logger;
   private pluginManager: PluginManager;
+  private compositeEventBus: TypedEventBus<HDRCanvasEventMap>;
 
   readonly registry: ServiceRegistry;
+
+  /**
+   * Core service keys that survive restart.
+   * These are environment-independent and bootstrapped once in the constructor.
+   */
+  private static readonly CORE_KEYS: ReadonlyArray<keyof ServiceMap> = [
+    'eventBus',
+    'runtimeEventBus',
+    'logger',
+  ];
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -53,7 +67,8 @@ export class CanvasRuntime {
     this.logger = createLogger(options.debug ?? false);
     this.pluginManager = new PluginManager(this.logger);
     this.registry = new ServiceRegistry();
-    this.bootstrap();
+    this.bootstrapCore();
+    this.compositeEventBus = this.createCompositeEventBus();
   }
 
   /**
@@ -74,7 +89,7 @@ export class CanvasRuntime {
   }
 
   /**
-   * Start runtime: initialize → start all managed services
+   * Start runtime: resolve config → bootstrap runtime services → initialize → start
    *
    * Flow: idle → initializing → running
    * On error: rollback initialized services → error
@@ -82,14 +97,15 @@ export class CanvasRuntime {
   async start(): Promise<void> {
     if (!this.kernel.prepareStart()) return;
 
-    await this.resolveConfig();
+    const config = await this.resolveConfig();
+    this.bootstrapRuntime(config);
 
     // Force lazy instantiation of managed services (factories populate managedInstances)
     for (const key of this.registry.getManagedKeys()) {
       this.registry.get(key);
     }
 
-    const ctx = this.createContext();
+    const ctx = this.createContext(config);
     const instances = this.registry.getManagedInstances();
     const initialized: RuntimeService[] = [];
 
@@ -116,7 +132,8 @@ export class CanvasRuntime {
   }
 
   /**
-   * Stop runtime: stop → dispose all managed services (reverse order)
+   * Stop runtime: stop → dispose all managed services (reverse order).
+   * Core services (eventBus, logger) are preserved for restart.
    *
    * Flow: running → stopping → stopped
    */
@@ -139,19 +156,18 @@ export class CanvasRuntime {
       }
     }
 
-    // Clear DI registry
-    this.registry.clear();
+    // Clear only runtime services — core services (eventBus, logger) survive
+    this.registry.clearRuntime(CanvasRuntime.CORE_KEYS);
 
     this.kernel.markStopped();
   }
 
   /**
-   * Restart runtime (stop + start)
+   * Restart runtime (stop + start).
+   * Core services survive — existing event subscriptions are preserved.
    */
   async restart(): Promise<void> {
     await this.stop();
-    // Re-bootstrap services after stop cleared them
-    this.bootstrap();
     await this.start();
   }
 
@@ -176,16 +192,11 @@ export class CanvasRuntime {
     eventBus.emit('render:complete', {});
   }
 
-  private compositeEventBus: TypedEventBus<HDRCanvasEventMap> | null = null;
-
   /**
    * Get composite EventBus for unified event subscriptions.
    * Routes domain events to domainBus, runtime events to runtimeBus.
    */
   getEventBus(): TypedEventBus<HDRCanvasEventMap> {
-    if (!this.compositeEventBus) {
-      this.compositeEventBus = this.createCompositeEventBus();
-    }
     return this.compositeEventBus;
   }
 
@@ -194,10 +205,10 @@ export class CanvasRuntime {
   // ============================================================
 
   /**
-   * Register all services in ServiceRegistry and track managed ones
+   * Bootstrap environment-independent core services.
+   * Called once in the constructor — these services survive restart.
    */
-  private bootstrap(): void {
-    // Infrastructure (pure services — no RuntimeService)
+  private bootstrapCore(): void {
     this.registry.register('eventBus', () => new TypedEventBus<DomainEventMap>());
     this.registry.register('runtimeEventBus', () => {
       const bus = new TypedEventBus<RuntimeEventMap>();
@@ -205,18 +216,21 @@ export class CanvasRuntime {
       return bus;
     });
     this.registry.register('logger', () => this.logger);
+  }
 
-    // Reset composite event bus (will be recreated on next getEventBus() call)
-    this.compositeEventBus = null;
-
+  /**
+   * Bootstrap runtime services that depend on resolved config.
+   * Called in start() after resolveConfig() — cleared on stop(), re-registered on restart.
+   */
+  private bootstrapRuntime(config: CoreConfig): void {
     // Renderer (managed) — use custom backend if provided, otherwise default to WebGPU
     this.registry.registerManaged('renderer', () => {
       const renderer =
-        this.config.renderer ??
+        config.renderer ??
         (() => {
           setGPUDeviceLogger(this.logger);
           return new WebGPURenderer(this.canvas, {
-            transparent: this.config.transparent,
+            transparent: config.transparent,
             logger: this.logger,
           });
         })();
@@ -227,15 +241,8 @@ export class CanvasRuntime {
     // Settings (pure)
     this.registry.register('settings', () => {
       return new RenderSettings(
-        {
-          exposure: this.config.renderOptions.exposure,
-          toneMapping: this.config.renderOptions.toneMapping,
-          hdrMode: this.config.renderOptions.hdrMode,
-          colorSpace: this.config.renderOptions.colorSpace,
-          visualizationMode: this.config.renderOptions.visualizationMode,
-          objectFit: this.config.renderOptions.objectFit,
-          debug: this.config.debug,
-        },
+        config.renderOptions, // autoState — fully resolved by ConfigResolver
+        config.userRenderOptions, // userState — explicit user intent, extracted in resolveConfig
         () => this.requestRender(),
         this.registry.get('eventBus')
       );
@@ -304,10 +311,18 @@ export class CanvasRuntime {
     // Loading (managed)
     this.registry.registerManaged('loading', () => {
       const eventBus = this.registry.get('eventBus');
-      const manager = new ImageLoadingManager(this.registry.get('uploadService'), eventBus);
+      const manager = new ImageLoadingManager(
+        this.registry.get('uploadService'),
+        (info) => {
+          const derived = deriveImageDefaults(info);
+          this.registry.get('settings').applyImageDefaults(derived);
+        },
+        eventBus
+      );
 
       // Re-render after image upload completes
       eventBus.on('loading:stateChange', ({ state }) => {
+        this.logger.log(`[CanvasRuntime] Loading state changed: ${state.status}`);
         if (state.status === 'success') this.requestRender();
       });
 
@@ -326,12 +341,12 @@ export class CanvasRuntime {
   /**
    * Create RuntimeContext for service initialization
    */
-  private createContext(): RuntimeContext {
+  private createContext(config: CoreConfig): RuntimeContext {
     return {
       eventBus: this.registry.get('eventBus'),
       signal: this.kernel.signal,
       logger: this.logger,
-      config: this.config,
+      config,
     };
   }
 
@@ -342,21 +357,21 @@ export class CanvasRuntime {
     return {
       canvas: this.canvas,
       services: this.registry,
-      events: this.getEventBus(),
+      events: this.compositeEventBus,
       logger: this.logger,
     };
   }
 
   /**
    * Resolve raw user options into a fully-populated CoreConfig.
-   * Called once in start() before any service factory is invoked.
-   * After this, this.config is guaranteed to be complete.
+   * Called once in start() before bootstrapRuntime().
    */
-  private async resolveConfig(): Promise<void> {
-    this.config = await resolveConfig(this.rawOptions);
+  private async resolveConfig(): Promise<CoreConfig> {
+    const config = await resolveConfig(this.rawOptions);
     this.logger.log(
-      `[CanvasRuntime] config resolved: hdrMode=${this.config.renderOptions.hdrMode} colorSpace=${this.config.renderOptions.colorSpace} toneMapping=${this.config.renderOptions.toneMapping}`
+      `[CanvasRuntime] config resolved: hdrMode=${config.renderOptions.hdrMode} colorSpace=${config.renderOptions.colorSpace} toneMapping=${config.renderOptions.toneMapping}`
     );
+    return config;
   }
 
   /**
@@ -397,6 +412,7 @@ export class CanvasRuntime {
   /**
    * Create a composite EventBus that routes events to the correct internal bus.
    * Domain events → domainBus, runtime events → runtimeBus.
+   * Called once in constructor after bootstrapCore() — never reset on restart.
    */
   private createCompositeEventBus(): TypedEventBus<HDRCanvasEventMap> {
     const domainBus = this.registry.get('eventBus');

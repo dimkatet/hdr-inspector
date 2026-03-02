@@ -12,30 +12,30 @@ import type {
 } from '@dimkatet/hdr-canvas';
 
 interface ControlsProps {
-  renderState: RenderState;
-  onRenderStateChange: (state: RenderState) => void;
+  displayState: Partial<RenderState>;
+  onUserOptionsChange: (options: Partial<RenderState>) => void;
   hdrAvailable: boolean;
 }
 
-export function Controls({ renderState, onRenderStateChange, hdrAvailable }: ControlsProps) {
+export function Controls({ displayState, onUserOptionsChange, hdrAvailable }: ControlsProps) {
   const handleExposureChange = (ev: number) => {
-    onRenderStateChange({ ...renderState, exposure: ev });
+    onUserOptionsChange({ exposure: ev });
   };
 
   const handleToneMappingChange = (operator: ToneMappingOperator) => {
-    onRenderStateChange({ ...renderState, toneMapping: operator });
+    onUserOptionsChange({ toneMapping: operator });
   };
 
   const handleVisualizationModeChange = (mode: VisualizationMode) => {
-    onRenderStateChange({ ...renderState, visualizationMode: mode });
+    onUserOptionsChange({ visualizationMode: mode });
   };
 
   const handleHdrModeChange = (enabled: boolean) => {
-    onRenderStateChange({ ...renderState, hdrMode: enabled });
+    onUserOptionsChange({ hdrMode: enabled });
   };
 
   const handleColorSpaceChange = (colorSpace: ColorSpace) => {
-    onRenderStateChange({ ...renderState, colorSpace });
+    onUserOptionsChange({ colorSpace });
   };
 
   return (
@@ -43,14 +43,14 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
       {/* Exposure Control */}
       <div style={{ marginBottom: '20px' }}>
         <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-          Exposure: {renderState.exposure.toFixed(2)} EV
+          Exposure: {displayState.exposure?.toFixed(2) || '0.00'} EV
         </label>
         <input
           type="range"
           min="-10"
           max="10"
           step="0.1"
-          value={renderState.exposure}
+          value={displayState.exposure}
           onChange={(e) => handleExposureChange(Number.parseFloat(e.target.value))}
           style={{ width: '100%' }}
         />
@@ -81,7 +81,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
               onClick={() => handleToneMappingChange(op)}
               style={{
                 padding: '8px 16px',
-                backgroundColor: renderState.toneMapping === op ? '#4a9eff' : '#333',
+                backgroundColor: displayState.toneMapping === op ? '#4a9eff' : '#333',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
@@ -110,7 +110,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
               onClick={() => handleVisualizationModeChange(mode)}
               style={{
                 padding: '8px 16px',
-                backgroundColor: renderState.visualizationMode === mode ? '#4a9eff' : '#333',
+                backgroundColor: displayState.visualizationMode === mode ? '#4a9eff' : '#333',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
@@ -138,7 +138,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
         >
           <input
             type="checkbox"
-            checked={renderState.hdrMode}
+            checked={displayState.hdrMode}
             onChange={(e) => handleHdrModeChange(e.target.checked)}
             disabled={!hdrAvailable}
             style={{
@@ -185,7 +185,7 @@ export function Controls({ renderState, onRenderStateChange, hdrAvailable }: Con
               onClick={() => handleColorSpaceChange(cs)}
               style={{
                 padding: '8px 16px',
-                backgroundColor: renderState.colorSpace === cs ? '#4a9eff' : '#333',
+                backgroundColor: displayState.colorSpace === cs ? '#4a9eff' : '#333',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',

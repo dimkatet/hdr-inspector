@@ -1,7 +1,14 @@
 // React component wrapper
 // Thin wrapper around HDRCanvas class with composable hooks
 
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 import type {
   ExportOptions,
   HDRCanvasOptions,
@@ -210,14 +217,32 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   // Handle image load with aspect ratio extraction (for 'auto' objectFit)
   const handleLoad = useCallback(
     (info: ImageInfo) => {
-      if (objectFit === 'auto') {
-        setAspectRatio(info.aspectRatio);
-      }
+      if (objectFit === 'auto') setAspectRatio(info.aspectRatio);
       onLoad?.(info);
     },
     [objectFit, onLoad]
   );
 
+  // When objectFit='auto', sync canvas pixel size after CSS aspect-ratio is committed,
+  // then force a render — ensures the image fits correctly on the first paint after load.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: aspectRatio changes only on image load, instance is stable after initialization
+  useLayoutEffect(() => {
+    if (!aspectRatio || !instance || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const pixelWidth = Math.round(rect.width * dpr);
+    const pixelHeight = Math.round(rect.height * dpr);
+
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+
+    instance.control.forceRender();
+  }, [aspectRatio, instance]);
+  
   // Load image (supports both direct ImageData and async loader)
   useImageLoader(instance, {
     image,
