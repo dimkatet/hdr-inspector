@@ -15,6 +15,8 @@ export class TypedEventBus<EventMap extends Record<string, any>> {
   private listeners = new Map<keyof EventMap, Set<(data: any) => void>>();
   // biome-ignore lint/complexity/noBannedTypes: WeakMap requires function reference, type-safe via generics in methods
   private throttledCallbacks = new WeakMap<Function, Function>();
+  // biome-ignore lint/suspicious/noExplicitAny: Global listener receives any event payload
+  private anyListeners = new Set<(event: keyof EventMap, data: any) => void>();
 
   /**
    * Subscribe to event with type-safe callback
@@ -56,9 +58,26 @@ export class TypedEventBus<EventMap extends Record<string, any>> {
   }
 
   /**
+   * Subscribe to all events.
+   * Listener is called on every emit before event-specific listeners.
+   *
+   * @returns Unsubscribe function
+   */
+  onAny(listener: (event: keyof EventMap, data: EventMap[keyof EventMap]) => void): () => void {
+    // biome-ignore lint/suspicious/noExplicitAny: Type erasure for heterogeneous event map storage
+    this.anyListeners.add(listener as (event: keyof EventMap, data: any) => void);
+    // biome-ignore lint/suspicious/noExplicitAny: Matches stored listener type
+    return () => this.anyListeners.delete(listener as any);
+  }
+
+  /**
    * Emit event to all subscribers with type-safe data
    */
   emit<K extends keyof EventMap>(event: K, data: EventMap[K]): void {
+    for (const listener of this.anyListeners) {
+      listener(event, data);
+    }
+
     const callbacks = this.listeners.get(event);
     if (!callbacks) return;
 
@@ -79,6 +98,7 @@ export class TypedEventBus<EventMap extends Record<string, any>> {
    */
   clear(): void {
     this.listeners.clear();
+    this.anyListeners.clear();
     // WeakMap will be garbage collected automatically
   }
 

@@ -28,7 +28,6 @@ export class ImageLoadingManager implements LoadingAPI, RuntimeService {
 
   constructor(
     private uploadService: ImageUploadService,
-    private onImageLoaded?: (info: ImageInfo) => void,
     private eventBus?: TypedEventBus<DomainEventMap>
   ) {}
 
@@ -64,8 +63,8 @@ export class ImageLoadingManager implements LoadingAPI, RuntimeService {
       this.setState({ status: 'loading', displayedImage: 'none' });
 
       const info = await this.uploadService.upload(data);
+      this.eventBus?.emit('loading:imageReady', { info });
       this.setState({ status: 'success', displayedImage: 'main', error: undefined });
-      this.onImageLoaded?.(info);
 
       return info;
     } catch (error) {
@@ -116,8 +115,8 @@ export class ImageLoadingManager implements LoadingAPI, RuntimeService {
 
       // Upload main image
       const info = await this.uploadService.upload(imageData);
+      this.eventBus?.emit('loading:imageReady', { info });
       this.setState({ status: 'success', displayedImage: 'main', error: undefined });
-      this.onImageLoaded?.(info);
 
       return info;
     } catch (error) {

@@ -24,23 +24,19 @@ import type {
 export class RenderSettings implements RenderAPI {
   private autoState: RenderState;
   private userState: Partial<RenderState>;
-  private onChange: () => void;
 
   /**
    * @param autoState  - Fully resolved initial state (from ConfigResolver / hardware detection)
    * @param userOptions - Fields explicitly provided by the user in HDRCanvasOptions
-   * @param onChange   - Callback to trigger re-render
-   * @param eventBus   - Optional event bus for change notifications
+   * @param eventBus   - Event bus for change notifications
    */
   constructor(
     autoState: RenderState,
     userOptions: Partial<RenderState>,
-    onChange: () => void,
     private eventBus?: TypedEventBus<DomainEventMap>
   ) {
     this.autoState = autoState;
     this.userState = { ...userOptions };
-    this.onChange = onChange;
   }
 
   // ============================================================
@@ -137,7 +133,6 @@ export class RenderSettings implements RenderAPI {
   // ============================================================
 
   private notifyChange(): void {
-    this.onChange();
     this.eventBus?.emit('render:settingsChanged', { settings: this.getState() });
   }
 }

@@ -12,16 +12,13 @@ import type { ResizeService } from './ResizeService';
 
 export class CanvasResizer implements ResizeService, RuntimeService {
   private canvas: HTMLCanvasElement;
-  private onResize: () => void;
   private observer: ResizeObserver | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
-    onResize: () => void,
     private eventBus?: TypedEventBus<DomainEventMap>
   ) {
     this.canvas = canvas;
-    this.onResize = onResize;
   }
 
   /**
@@ -45,9 +42,6 @@ export class CanvasResizer implements ResizeService, RuntimeService {
         if (dWidth > dpr || dHeight > dpr) {
           this.canvas.width = pixelWidth;
           this.canvas.height = pixelHeight;
-          this.onResize();
-
-          // Emit resize event
           this.eventBus?.emit('canvas:resized', {
             width: pixelWidth,
             height: pixelHeight,

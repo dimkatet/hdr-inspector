@@ -223,6 +223,15 @@ export class CanvasRuntime {
    * Called in start() after resolveConfig() — cleared on stop(), re-registered on restart.
    */
   private bootstrapRuntime(config: CoreConfig): void {
+    this.registerServices(config);
+    this.wireSubscriptions();
+  }
+
+  /**
+   * Register all runtime services in the DI container.
+   * Pure service registration — no side-effects or event wiring here.
+   */
+  private registerServices(config: CoreConfig): void {
     // Renderer (managed) — use custom backend if provided, otherwise default to WebGPU
     this.registry.registerManaged('renderer', () => {
       const renderer =
@@ -243,19 +252,13 @@ export class CanvasRuntime {
       return new RenderSettings(
         config.renderOptions, // autoState — fully resolved by ConfigResolver
         config.userRenderOptions, // userState — explicit user intent, extracted in resolveConfig
-        () => this.requestRender(),
         this.registry.get('eventBus')
       );
     });
 
     // Viewport (managed)
     this.registry.registerManaged('viewport', () => {
-      const eventBus = this.registry.get('eventBus');
-      const controller = new ViewportController({}, eventBus, this.logger);
-
-      // Subscribe to viewport updates for re-rendering
-      eventBus.on('viewport:update', () => this.requestRender());
-
+      const controller = new ViewportController({}, this.registry.get('eventBus'), this.logger);
       this.registry.trackManagedInstance('viewport', controller);
       return controller;
     });
@@ -289,11 +292,7 @@ export class CanvasRuntime {
 
     // Resizer (managed)
     this.registry.registerManaged('resizer', () => {
-      const resizer = new CanvasResizer(
-        this.canvas,
-        () => this.requestRender(),
-        this.registry.get('eventBus')
-      );
+      const resizer = new CanvasResizer(this.canvas, this.registry.get('eventBus'));
       this.registry.trackManagedInstance('resizer', resizer);
       return resizer;
     });
@@ -310,22 +309,10 @@ export class CanvasRuntime {
 
     // Loading (managed)
     this.registry.registerManaged('loading', () => {
-      const eventBus = this.registry.get('eventBus');
       const manager = new ImageLoadingManager(
         this.registry.get('uploadService'),
-        (info) => {
-          const derived = deriveImageDefaults(info);
-          this.registry.get('settings').applyImageDefaults(derived);
-        },
-        eventBus
+        this.registry.get('eventBus')
       );
-
-      // Re-render after image upload completes
-      eventBus.on('loading:stateChange', ({ state }) => {
-        this.logger.log(`[CanvasRuntime] Loading state changed: ${state.status}`);
-        if (state.status === 'success') this.requestRender();
-      });
-
       this.registry.trackManagedInstance('loading', manager);
       return manager;
     });
@@ -335,6 +322,30 @@ export class CanvasRuntime {
       return new ExportManager(this.registry.get('readbackService'), () =>
         this.registry.get('settings').getState()
       );
+    });
+  }
+
+  /**
+   * Wire reactive subscriptions between services.
+   * All event-driven orchestration lives here — render triggers and side-effects.
+   */
+  private wireSubscriptions(): void {
+    const eventBus = this.registry.get('eventBus');
+
+    // Debug logging — all events
+    eventBus.onAny((event) => this.logger.log(`[EventBus] ${String(event)}`));
+
+    // Re-render triggers
+    eventBus.on('render:settingsChanged', () => this.requestRender());
+    eventBus.on('viewport:update', () => this.requestRender());
+    eventBus.on('canvas:resized', () => this.requestRender());
+    eventBus.on('loading:stateChange', ({ state }) => {
+      if (state.status === 'success') this.requestRender();
+    });
+
+    // Side-effects
+    eventBus.on('loading:imageReady', ({ info }) => {
+      this.registry.get('settings').applyImageDefaults(deriveImageDefaults(info));
     });
   }
 

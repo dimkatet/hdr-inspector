@@ -7,6 +7,7 @@
 
 import type {
   DisplayedImageType,
+  ImageInfo,
   LoadingState,
   RenderState,
   ViewportMutation,
@@ -33,6 +34,9 @@ export interface DomainEventMap {
   };
 
   // Loading events
+  'loading:imageReady': {
+    info: ImageInfo;
+  };
   'loading:stateChange': {
     state: LoadingState;
     type: DisplayedImageType;
