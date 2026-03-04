@@ -40,10 +40,12 @@ export function useHDRCanvas(
       try {
         hdr = new HDRCanvas(canvasRef.current!, optionsRef.current);
         await hdr.initialize();
-        cleanup = hdr.control.enableAutoResize();
-        if (!cancelled) {
-          setInstance(hdr);
+        if (cancelled) {
+          hdr.destroy();
+          return;
         }
+        cleanup = hdr.control.enableAutoResize();
+        setInstance(hdr);
       } catch (error) {
         if (!cancelled) {
           onErrorRef.current?.(error as Error);
