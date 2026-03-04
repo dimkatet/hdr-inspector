@@ -7,7 +7,7 @@
 
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
-import type { ImageData, TransferFunction } from '../types';
+import type { ImageData, LinearImageData, TransferFunction } from '../types';
 import { GPUImagePreprocessor } from './GPUImagePreprocessor';
 import type { ImagePreprocessor } from './ImagePreprocessor';
 
@@ -47,8 +47,19 @@ export class TextureManager {
   /**
    * Upload image to GPU texture.
    * Delegates preprocessing (RGB→RGBA, bit depth remapping) to ImageProcessor.
+   *
+   * Float32Array inputs are downcast to Float16Array before upload.
+   * This enables bilinear filtering (rgba16float is filterable; rgba32float is not),
+   * and halves GPU memory usage. Float16 precision is sufficient for display.
    */
   async uploadImage(image: ImageData): Promise<void> {
+    // Downcast Float32 → Float16 to enable bilinear filtering on GPU.
+    // rgba32float textures require non-filtering samplers (WebGPU limitation).
+    // rgba16float is filterable and uses half the GPU memory.
+    if (image.data instanceof Float32Array) {
+      image = { ...(image as LinearImageData), data: new Float16Array(image.data) };
+    }
+
     this.imageWidth = image.width;
     this.imageHeight = image.height;
     this.currentTransferFunction = image.transferFunction;
