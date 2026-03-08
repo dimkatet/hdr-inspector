@@ -12,6 +12,13 @@ export interface MouseCallbacks {
   onDrag: (deltaX: number, deltaY: number) => void;
   /** Called on double-click */
   onDblClick: () => void;
+  /**
+   * Optional guard called on mousedown before starting a drag.
+   * Return true if the image can be panned — the event will be consumed (stopPropagation).
+   * Return false to let the event propagate to parent elements.
+   * If not provided, drag is always started.
+   */
+  canDrag?: () => boolean;
 }
 
 export interface MouseHandlerConfig {
@@ -126,7 +133,14 @@ export class MouseHandler {
 
   private handleMouseDown(e: MouseEvent): void {
     if (e.button !== 0) return; // Left click only
+
+    // Smart propagation: skip drag if image cannot pan (zoom ≤ 1 or at edge)
+    if (this.callbacks.canDrag && !this.callbacks.canDrag()) {
+      return; // let event propagate to parent
+    }
+
     e.preventDefault();
+    e.stopPropagation(); // prevent parent drag handlers from firing
     this.isDragging = true;
     this.lastPos = { x: e.clientX, y: e.clientY };
     document.addEventListener('mousemove', this.boundHandleMouseMove);

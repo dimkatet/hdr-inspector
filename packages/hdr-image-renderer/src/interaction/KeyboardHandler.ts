@@ -18,6 +18,13 @@ export interface KeyboardCallbacks {
   onZoomToActual: () => void;
   /** Called when reset is requested */
   onReset: () => void;
+  /**
+   * Optional guard for pan keys (arrows, WASD).
+   * Same semantics as TouchCallbacks.canPan: return true to consume the key event,
+   * false to let it propagate (e.g. so the browser can scroll the page).
+   * Zoom/reset keys are always consumed regardless of this callback.
+   */
+  canPan?: (deltaX: number, deltaY: number) => boolean;
 }
 
 export interface KeyboardConfig {
@@ -167,19 +174,23 @@ export class KeyboardHandler {
 
     let handled = false;
 
-    // Pan controls
+    // Pan controls — only consume the key if the image can actually pan in that direction.
+    // If not (zoom ≤ 1 or at edge), leave handled=false so the browser handles the key
+    // (e.g. arrow keys scroll the page).
+    const tryPan = (deltaX: number, deltaY: number): boolean => {
+      if (this.callbacks.canPan && !this.callbacks.canPan(deltaX, deltaY)) return false;
+      this.callbacks.onPan(deltaX, deltaY);
+      return true;
+    };
+
     if (this.config.panUp.has(key)) {
-      this.callbacks.onPan(0, this.config.panStep);
-      handled = true;
+      handled = tryPan(0, this.config.panStep);
     } else if (this.config.panDown.has(key)) {
-      this.callbacks.onPan(0, -this.config.panStep);
-      handled = true;
+      handled = tryPan(0, -this.config.panStep);
     } else if (this.config.panLeft.has(key)) {
-      this.callbacks.onPan(this.config.panStep, 0);
-      handled = true;
+      handled = tryPan(this.config.panStep, 0);
     } else if (this.config.panRight.has(key)) {
-      this.callbacks.onPan(-this.config.panStep, 0);
-      handled = true;
+      handled = tryPan(-this.config.panStep, 0);
     }
     // Zoom controls
     else if (this.config.zoomIn.has(key)) {

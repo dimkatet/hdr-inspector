@@ -39,4 +39,19 @@ export interface ViewportFacade {
    * @param config - Partial config to merge with current settings
    */
   updateConfig(config: Partial<ViewportConfig>): void;
+
+  /**
+   * Check whether the image can pan in the given direction.
+   * Used by interaction handlers to decide whether to consume DOM events
+   * or let them propagate to parent elements (e.g. page scroll, parent drag).
+   *
+   * @param deltaX - Normalized horizontal delta (same sign convention as pan mutations).
+   *                 Positive = mouse/touch moved right → panX decreases.
+   * @param deltaY - Normalized vertical delta. Positive = moved down → panY decreases.
+   * @returns true if the image will visually move when panned in this direction.
+   *          false if zoom ≤ 1 (fits in viewport) or pan is already at the edge.
+   *
+   * When called with no arguments (0, 0): returns true if any pan is possible (zoom > 1).
+   */
+  canPan(deltaX?: number, deltaY?: number): boolean;
 }

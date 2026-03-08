@@ -12,6 +12,14 @@ export interface TouchCallbacks {
   onPinch: (scaleDelta: number, centerX: number, centerY: number) => void;
   /** Called on double-tap */
   onDoubleTap: () => void;
+  /**
+   * Optional guard for single-finger pan.
+   * Called with the current normalized delta (0,0 on touchstart before direction is known).
+   * Return true to consume the event (preventDefault + handle pan).
+   * Return false to let native scroll handle it.
+   * If not provided, all pan events are always consumed.
+   */
+  canPan?: (deltaX: number, deltaY: number) => boolean;
 }
 
 export interface TouchHandlerConfig {
@@ -112,11 +120,17 @@ export class TouchHandler {
   // ============================================================
 
   private handleTouchStart(e: TouchEvent): void {
-    e.preventDefault();
-
     if (e.touches.length === 1) {
       // Single finger - prepare for pan or double-tap
       const touch = e.touches[0];
+
+      // Smart propagation: only consume if image can pan.
+      // Use (0,0) direction since we don't know it yet — just check zoom level.
+      const canPan = !this.callbacks.canPan || this.callbacks.canPan(0, 0);
+      if (canPan) {
+        e.preventDefault();
+      }
+
       this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
 
       // Check for double-tap
@@ -139,24 +153,36 @@ export class TouchHandler {
       // Reset pinch state
       this.lastPinchDistance = null;
     } else if (e.touches.length === 2) {
-      // Two fingers - prepare for pinch
+      // Two fingers - always consume for pinch zoom
+      e.preventDefault();
       this.lastTouchPos = null; // Stop panning
       this.lastPinchDistance = this.getPinchDistance(e.touches);
     }
   }
 
   private handleTouchMove(e: TouchEvent): void {
-    e.preventDefault();
-
     if (e.touches.length === 1 && this.lastTouchPos) {
       // Single finger pan
       const touch = e.touches[0];
       const rect = this.canvas.getBoundingClientRect();
       const deltaX = (touch.clientX - this.lastTouchPos.x) / rect.width;
       const deltaY = (touch.clientY - this.lastTouchPos.y) / rect.height;
+
+      // Smart propagation: check if image can pan in this direction.
+      // If not (zoom ≤ 1 or at edge), let native scroll handle it.
+      const canPan = !this.callbacks.canPan || this.callbacks.canPan(deltaX, deltaY);
+      if (!canPan) {
+        // Update position tracking so next frame delta is correct,
+        // but don't consume the event — allow native scroll.
+        this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
+        return;
+      }
+
+      e.preventDefault();
       this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
       this.callbacks.onPan(deltaX, deltaY);
     } else if (e.touches.length === 2) {
+      e.preventDefault();
       // Two finger pinch zoom
       const currentDistance = this.getPinchDistance(e.touches);
 

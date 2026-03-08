@@ -68,6 +68,7 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
     const mouseHandler = new MouseHandler(
       this.canvas,
       {
+        canDrag: () => this.target.canPan(),
         onWheel: (deltaY, cursorX, cursorY) => {
           // Calculate zoom from wheel delta
           const zoomDelta = -deltaY * wheelSensitivity;
@@ -103,6 +104,7 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
     const touchHandler = new TouchHandler(
       this.canvas,
       {
+        canPan: (deltaX, deltaY) => this.target.canPan(deltaX, deltaY),
         onPan: (deltaX, deltaY) =>
           this.target.applyMutation({
             type: 'pan',
@@ -140,6 +142,7 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
     const keyboardHandler = new KeyboardHandler(
       this.canvas,
       {
+        canPan: (deltaX, deltaY) => this.target.canPan(deltaX, deltaY),
         onPan: (deltaX, deltaY) => {
           this.target.applyMutation({
             type: 'pan',

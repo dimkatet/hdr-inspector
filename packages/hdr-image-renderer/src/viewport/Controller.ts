@@ -70,6 +70,31 @@ export class ViewportController implements ViewportFacade, RuntimeService {
   }
 
   /**
+   * Check whether the image can pan in the given direction.
+   * Mirrors the clampPan logic: returns false when zoom ≤ 1 (no pan space)
+   * or when the current pan is already at the edge in the requested direction.
+   */
+  canPan(deltaX = 0, deltaY = 0): boolean {
+    const { zoom, panX, panY } = this.state;
+    if (zoom <= 1) return false;
+
+    const maxPan = (1 - 1 / zoom) / 2;
+
+    // No direction given — image is zoomed in so some pan is always possible
+    if (deltaX === 0 && deltaY === 0) return true;
+
+    // deltaX > 0: panX will decrease → approaching -maxPan edge
+    // deltaX < 0: panX will increase → approaching +maxPan edge
+    const EDGE = 1e-4;
+    const canX =
+      deltaX > 0 ? panX > -(maxPan - EDGE) : deltaX < 0 ? panX < maxPan - EDGE : false;
+    const canY =
+      deltaY > 0 ? panY > -(maxPan - EDGE) : deltaY < 0 ? panY < maxPan - EDGE : false;
+
+    return canX || canY;
+  }
+
+  /**
    * Get target viewport state (where animation is heading)
    */
   getTarget(): ViewportState {
