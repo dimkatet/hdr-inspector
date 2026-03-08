@@ -1,7 +1,7 @@
 /**
  * InteractionManager - Interaction handler lifecycle coordination
  *
- * Creates and manages MouseHandler, TouchHandler, and KeyboardHandler instances.
+ * Creates and manages PointerHandler and KeyboardHandler instances.
  * Wires up callbacks from handlers to viewport mutations and commands.
  *
  * Uses ViewportFacade interface to decouple from specific viewport implementations.
@@ -12,8 +12,7 @@ import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
 import { KeyboardHandler } from './KeyboardHandler';
-import { MouseHandler } from './MouseHandler';
-import { TouchHandler } from './TouchHandler';
+import { PointerHandler } from './PointerHandler';
 import type { ViewportFacade } from './ViewportFacade';
 
 interface ZoomCommands {
@@ -43,7 +42,7 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
   }
 
   /**
-   * Attach mouse, touch, and keyboard interactions for zoom and pan.
+   * Attach pointer and keyboard interactions for zoom and pan.
    * @param options - Interaction options including viewport config and callbacks
    * @returns Cleanup function to detach all listeners
    */
@@ -64,47 +63,11 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
     const wheelEnabled = typeof wheel === 'boolean' ? wheel : (wheel?.enabled ?? true);
     const wheelSensitivity = typeof wheel === 'object' ? (wheel.sensitivity ?? 0.001) : 0.001;
 
-    // Create mouse handler with config
-    const mouseHandler = new MouseHandler(
+    // Create unified pointer handler (mouse + touch + pen)
+    const pointerHandler = new PointerHandler(
       this.canvas,
       {
-        canDrag: () => this.target.canPan(),
-        onWheel: (deltaY, cursorX, cursorY) => {
-          // Calculate zoom from wheel delta
-          const zoomDelta = -deltaY * wheelSensitivity;
-          const currentZoom = this.target.getState().zoom;
-          const newZoom = currentZoom * Math.exp(zoomDelta);
-
-          this.target.applyMutation({
-            type: 'zoom',
-            zoom: newZoom,
-            centerX: cursorX,
-            centerY: cursorY,
-            source: 'wheel',
-          });
-        },
-        onDrag: (deltaX, deltaY) =>
-          this.target.applyMutation({
-            type: 'pan',
-            deltaX,
-            deltaY,
-            source: 'drag',
-          }),
-        onDblClick: () => {
-          this.target.applyMutation({
-            type: 'reset',
-            source: 'dblclick',
-          });
-        },
-      },
-      { wheel: wheelEnabled, drag }
-    );
-
-    // Create touch handler with config
-    const touchHandler = new TouchHandler(
-      this.canvas,
-      {
-        canPan: (deltaX, deltaY) => this.target.canPan(deltaX, deltaY),
+        canPan: (dx, dy) => this.target.canPan(dx, dy),
         onPan: (deltaX, deltaY) =>
           this.target.applyMutation({
             type: 'pan',
@@ -113,10 +76,8 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
             source: 'drag',
           }),
         onPinch: (scaleDelta, centerX, centerY) => {
-          // Calculate new zoom from pinch scale
           const currentZoom = this.target.getState().zoom;
           const newZoom = currentZoom * scaleDelta;
-
           this.target.applyMutation({
             type: 'zoom',
             zoom: newZoom,
@@ -128,11 +89,23 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
         onDoubleTap: () => {
           this.target.applyMutation({
             type: 'reset',
-            source: 'doubletap',
+            source: 'dblclick',
+          });
+        },
+        onWheel: (deltaY, cursorX, cursorY) => {
+          const zoomDelta = -deltaY * wheelSensitivity;
+          const currentZoom = this.target.getState().zoom;
+          const newZoom = currentZoom * Math.exp(zoomDelta);
+          this.target.applyMutation({
+            type: 'zoom',
+            zoom: newZoom,
+            centerX: cursorX,
+            centerY: cursorY,
+            source: 'wheel',
           });
         },
       },
-      { enabled: touch }
+      { wheel: wheelEnabled, drag, touch }
     );
 
     // Get zoom commands
@@ -167,11 +140,10 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
     );
 
     // Attach all handlers
-    const detachMouse = mouseHandler.attach();
-    const detachTouch = touchHandler.attach();
+    const detachPointer = pointerHandler.attach();
     const detachKeyboard = keyboardHandler.attach();
 
-    this.cleanupFunctions = [detachMouse, detachTouch, detachKeyboard];
+    this.cleanupFunctions = [detachPointer, detachKeyboard];
 
     // Return cleanup function
     return () => this.detach();

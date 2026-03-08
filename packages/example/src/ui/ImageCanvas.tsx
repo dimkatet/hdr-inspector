@@ -97,7 +97,7 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
         options={{
           ...options,
           transparent: true,
-          debug: true,
+          // debug: true,
         }}
         onLoad={handleLoad}
         onError={handleError}

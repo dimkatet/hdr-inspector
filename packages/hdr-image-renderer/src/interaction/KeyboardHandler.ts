@@ -122,18 +122,10 @@ export class KeyboardHandler {
       this.element.setAttribute('tabindex', '0');
     }
 
-    // Focus canvas on click (canvas doesn't auto-focus like input elements)
-    const onClick = () => this.element.focus();
-
-    this.element.addEventListener('click', onClick);
     this.element.addEventListener('keydown', this.boundHandleKeyDown);
 
     this.attached = true;
-
-    return () => {
-      this.element.removeEventListener('click', onClick);
-      this.detach();
-    };
+    return () => this.detach();
   }
 
   /**

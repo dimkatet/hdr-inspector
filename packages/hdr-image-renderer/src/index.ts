@@ -9,7 +9,7 @@ export type { ImageEncoder, PixelReadback } from './export';
 export { HDRCanvas } from './HDRCanvas';
 export { ImageLoadingManager } from './ImageLoadingManager';
 export type { ImageUploadService } from './ImageUploadService';
-export { KeyboardHandler, MouseHandler, TouchHandler } from './interaction';
+export { KeyboardHandler, PointerHandler } from './interaction';
 export { destroySharedDevice } from './render/gpu-device';
 export type { PixelReadbackService } from './render/PixelReadbackService';
 export type { Renderer, RendererService, RenderOptions } from './render/Renderer';
