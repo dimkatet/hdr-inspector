@@ -129,6 +129,7 @@ export class TouchHandler {
       const canPan = !this.callbacks.canPan || this.callbacks.canPan(0, 0);
       if (canPan) {
         e.preventDefault();
+        e.stopPropagation(); // prevent parent JS handlers (e.g. carousel) from receiving touchstart
       }
 
       this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
@@ -179,10 +180,12 @@ export class TouchHandler {
       }
 
       e.preventDefault();
+      e.stopPropagation();
       this.lastTouchPos = { x: touch.clientX, y: touch.clientY };
       this.callbacks.onPan(deltaX, deltaY);
     } else if (e.touches.length === 2) {
       e.preventDefault();
+      e.stopPropagation();
       // Two finger pinch zoom
       const currentDistance = this.getPinchDistance(e.touches);
 

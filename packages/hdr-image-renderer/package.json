@@ -1,6 +1,6 @@
 {
   "name": "@dimkatet/hdr-canvas",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "WebGPU-based HDR image rendering library with native HDR display support and React bindings",
   "type": "module",
   "main": "./dist/index.js",
