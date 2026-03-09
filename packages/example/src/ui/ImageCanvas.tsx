@@ -68,6 +68,9 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
     minWidth: '44px',
   };
 
+  // useRef, not useState — event handlers need synchronous access, React state is async
+  const capturingRef = useRef(false);
+
   if (error) {
     return (
       <div
@@ -89,7 +92,7 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
   }
   if (!loader) return null;
   return (
-    <div>
+    <div onTouchStart={() => console.log('touch start; capturing:', capturingRef.current)} onTouchEnd={() => console.log('touch end; capturing:', capturingRef.current)}>
       <HDRImage
         ref={hdrRef}
         objectFit="auto"
@@ -102,6 +105,10 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
         onLoad={handleLoad}
         onError={handleError}
         onZoom={handleZoom}
+        onGestureChange={(capturing, type) => {
+          console.log('Gesture change:', capturing, type);
+          capturingRef.current = capturing;
+        }}
         interactions={{
           wheel: { sensitivity: 0.0015 },
           drag: true,

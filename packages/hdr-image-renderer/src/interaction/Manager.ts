@@ -7,7 +7,9 @@
  * Uses ViewportFacade interface to decouple from specific viewport implementations.
  */
 
+import type { DomainEventMap } from '../core/EventTypes';
 import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
+import type { TypedEventBus } from '../core/TypedEventBus';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
 import type { InteractionAPI, InteractionOptions, ViewportConfig } from '../types';
@@ -23,23 +25,15 @@ interface ZoomCommands {
 }
 
 export class InteractionManager implements InteractionAPI, RuntimeService {
-  private canvas: HTMLCanvasElement;
-  private target: ViewportFacade;
-  private getZoomCommands: () => ZoomCommands;
   private cleanupFunctions: Array<() => void> = [];
-  private logger: Logger;
+  private eventBus: TypedEventBus<DomainEventMap> | null = null;
 
   constructor(
-    canvas: HTMLCanvasElement,
-    target: ViewportFacade,
-    getZoomCommands: () => ZoomCommands,
-    logger: Logger = silentLogger
-  ) {
-    this.canvas = canvas;
-    this.target = target;
-    this.getZoomCommands = getZoomCommands;
-    this.logger = logger;
-  }
+    private canvas: HTMLCanvasElement,
+    private target: ViewportFacade,
+    private getZoomCommands: () => ZoomCommands,
+    private logger: Logger = silentLogger
+  ) {}
 
   /**
    * Attach pointer and keyboard interactions for zoom and pan.
@@ -92,6 +86,8 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
             source: 'dblclick',
           });
         },
+        onGestureChange: (capturing, type) =>
+          this.eventBus?.emit('interaction:gestureChange', { capturing, type }),
         onWheel: (deltaY, cursorX, cursorY) => {
           const zoomDelta = -deltaY * wheelSensitivity;
           const currentZoom = this.target.getState().zoom;
@@ -163,8 +159,8 @@ export class InteractionManager implements InteractionAPI, RuntimeService {
   // RuntimeService implementation
   // ============================================================
 
-  async init(_ctx: RuntimeContext): Promise<void> {
-    // no-op — configured via constructor
+  async init(ctx: RuntimeContext): Promise<void> {
+    this.eventBus = ctx.eventBus;
   }
 
   start(): void {

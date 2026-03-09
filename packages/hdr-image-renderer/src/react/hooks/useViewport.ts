@@ -20,6 +20,13 @@ export interface UseViewportOptions extends ViewportConfig {
   keyboard?: boolean | KeyboardConfig;
   /** Callback when viewport changes (fires on every frame during animation) */
   onViewportChange?: (viewport: ViewportState) => void;
+  /**
+   * Callback when the canvas acquires or releases gesture ownership.
+   * `capturing: true` — canvas is actively handling a pan or pinch and consuming pointer events.
+   * `capturing: false` — gesture ended, pointer events propagate normally again.
+   * Useful for disabling parent scroll/drag while the canvas owns the gesture.
+   */
+  onGestureChange?: (capturing: boolean, type: 'pan' | 'pinch' | null) => void;
 }
 
 export interface UseViewportResult {
@@ -40,6 +47,7 @@ export function useViewport(
   const {
     enabled = false,
     onViewportChange,
+    onGestureChange,
     keyboard,
     wheel,
     drag,
@@ -56,11 +64,16 @@ export function useViewport(
     panY: 0,
   });
 
-  // Store callback in ref to avoid re-subscribing
+  // Store callbacks in refs to avoid re-subscribing on every render
   const onViewportChangeRef = useRef(onViewportChange);
   useEffect(() => {
     onViewportChangeRef.current = onViewportChange;
   }, [onViewportChange]);
+
+  const onGestureChangeRef = useRef(onGestureChange);
+  useEffect(() => {
+    onGestureChangeRef.current = onGestureChange;
+  }, [onGestureChange]);
 
   // Derive stable primitive values from potentially-object configs.
   // Using these as deps (instead of the objects) prevents re-attachment on every render
@@ -98,9 +111,14 @@ export function useViewport(
       onViewportChangeRef.current?.(state);
     });
 
+    const unsubscribeGesture = instance.on('interaction:gestureChange', ({ capturing, type }) => {
+      onGestureChangeRef.current?.(capturing, type);
+    });
+
     return () => {
       detachInteractions();
       unsubscribeViewport();
+      unsubscribeGesture();
     };
   }, [
     enabled,

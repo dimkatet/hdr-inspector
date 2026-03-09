@@ -141,6 +141,11 @@ export interface HDRImageProps
   /** Callback when zoom changes (throttled for wheel/pinch, immediate for buttons) */
   onZoom?: (zoom: number, state: ViewportState) => void;
   /**
+   * Callback when the canvas acquires or releases gesture ownership.
+   * Useful for disabling parent scroll/carousel while the canvas owns the gesture.
+   */
+  onGestureChange?: (capturing: boolean, type: 'pan' | 'pinch' | null) => void;
+  /**
    * Object-fit mode for image display.
    * - 'auto': Adjust canvas aspect-ratio to match image + use contain rendering (React-only)
    * - 'contain': Fit entire image within canvas, letterbox/pillarbox as needed (default)
@@ -166,6 +171,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     onError,
     interactions = false,
     onViewportChange,
+    onGestureChange,
     onZoom,
     objectFit,
     className,
@@ -261,8 +267,8 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   // Setup zoom/pan if enabled
   const viewportOptions: UseViewportOptions =
     typeof interactions === 'boolean'
-      ? { enabled: interactions, onViewportChange }
-      : { enabled: true, ...interactions, onViewportChange };
+      ? { enabled: interactions, onViewportChange, onGestureChange }
+      : { enabled: true, ...interactions, onViewportChange, onGestureChange };
 
   useViewport(instance, viewportOptions);
 

@@ -54,6 +54,18 @@ export interface DomainEventMap {
     width: number;
     height: number;
   };
+
+  // Interaction events
+  /**
+   * Emitted when the canvas acquires or releases gesture ownership.
+   * `capturing: true` means the canvas is actively handling a pan or pinch gesture
+   * and is consuming pointer events (stopPropagation/preventDefault in effect).
+   * `capturing: false` means the gesture ended and events propagate normally.
+   */
+  'interaction:gestureChange': {
+    capturing: boolean;
+    type: 'pan' | 'pinch' | null;
+  };
 }
 
 /**

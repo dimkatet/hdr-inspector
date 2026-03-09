@@ -42,6 +42,12 @@ export interface PointerCallbacks {
    * Return false to abort / propagate; true to capture the gesture.
    */
   canPan?: (deltaX: number, deltaY: number) => boolean;
+  /**
+   * Called when gesture capture state changes.
+   * `capturing: true` — canvas just acquired gesture ownership (active pan or pinch).
+   * `capturing: false` — gesture ended, events propagate normally again.
+   */
+  onGestureChange?: (capturing: boolean, type: 'pan' | 'pinch' | null) => void;
 }
 
 export interface PointerHandlerConfig {
@@ -72,6 +78,11 @@ export class PointerHandler {
 
   // Pinch state
   private lastPinchDistance: number | null = null;
+
+  // Current gesture type for change tracking
+  private capturedGestureType: 'pan' | 'pinch' | null = null;
+  // Pending release timer — defers gestureChange(false) until after touchend fires on parent
+  private pendingReleaseTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Double-tap / double-click detection
   private lastTapTime = 0;
@@ -164,6 +175,11 @@ export class PointerHandler {
 
     this.resetState();
     this.pointers.clear();
+    if (this.pendingReleaseTimer !== null) {
+      clearTimeout(this.pendingReleaseTimer);
+      this.pendingReleaseTimer = null;
+    }
+    this.capturedGestureType = null;
     this.attached = false;
   }
 
@@ -226,6 +242,7 @@ export class PointerHandler {
       e.stopPropagation();
       this.gestureState = 'active';
       this.lastPinchDistance = this.getPinchDistance();
+      this.setGesture(true, 'pinch');
 
       // Capture both pointers for mouse/pen pinch so events continue outside the canvas.
       // Skip for touch — the browser applies implicit capture per spec.
@@ -309,6 +326,7 @@ export class PointerHandler {
       // For touch: the browser applies implicit capture per spec, so explicit
       // capture is skipped (explicit capture breaks DevTools touch emulation).
       this.gestureState = 'active';
+      this.setGesture(true, 'pan');
       if (e.pointerType !== 'touch') {
         try {
           this.canvas.setPointerCapture(e.pointerId);
@@ -345,6 +363,7 @@ export class PointerHandler {
       this.gestureState = 'idle';
       this.primaryPointerId = null;
       this.resetState();
+      this.setGesture(false, null);
     } else if (this.pointers.size === 1) {
       // One finger remaining after pinch — continue as ACTIVE pan (no threshold).
       // Skip threshold: user is already in an active interaction.
@@ -354,6 +373,7 @@ export class PointerHandler {
       this.startPos = { x: pos.x, y: pos.y };
       this.lastPos = { x: pos.x, y: pos.y };
       this.lastPinchDistance = null;
+      this.setGesture(true, 'pan');
     }
   }
 
@@ -369,6 +389,7 @@ export class PointerHandler {
       this.gestureState = 'idle';
       this.primaryPointerId = null;
       this.resetState();
+      this.setGesture(false, null);
     }
   }
 
@@ -388,6 +409,31 @@ export class PointerHandler {
     this.startPos = null;
     this.lastPos = null;
     this.lastPinchDistance = null;
+  }
+
+  private setGesture(capturing: boolean, type: 'pan' | 'pinch' | null): void {
+    if (capturing) {
+      // Cancel any pending release — new gesture started before the deferred false fired.
+      if (this.pendingReleaseTimer !== null) {
+        clearTimeout(this.pendingReleaseTimer);
+        this.pendingReleaseTimer = null;
+      }
+      const newType = type;
+      if (this.capturedGestureType === newType) return;
+      this.capturedGestureType = newType;
+      this.callbacks.onGestureChange?.(true, newType);
+    } else {
+      if (this.capturedGestureType === null && this.pendingReleaseTimer === null) return;
+      // Defer the release notification until the next macrotask.
+      // Pointer events (pointerup) fire before touch events (touchend) in the browser's
+      // dispatch order. By deferring, parent touchend handlers still observe capturing=true
+      // and can react accordingly (e.g. prevent a carousel from swiping).
+      this.capturedGestureType = null;
+      this.pendingReleaseTimer = setTimeout(() => {
+        this.pendingReleaseTimer = null;
+        this.callbacks.onGestureChange?.(false, null);
+      }, 0);
+    }
   }
 
   private getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }): number {
