@@ -186,7 +186,7 @@ struct Uniforms {
   toneMapping: f32,      // 0=none, 1=reinhard, 2=aces
   visualizationMode: f32, // 0=rgb, 1=luminance, 2=clipping
   hdrMode: f32,           // 0=sRGB output, 1=PQ output
-  colorSpace: f32,        // 0=srgb, 1=display-p3, 2=rec2020
+  inputColorSpace: f32,   // 0=BT.709/sRGB, 1=Display-P3, 2=Rec.2020
   zoom: f32,              // Zoom level (1.0 = 100%)
   panX: f32,              // Pan offset X in normalized coords
   panY: f32,              // Pan offset Y in normalized coords
@@ -206,20 +206,25 @@ struct Uniforms {
 const BT709_WEIGHTS = vec3<f32>(0.2126, 0.7152, 0.0722);
 
 // === Color Space Conversion Matrices ===
+// Shader always outputs BT.709/sRGB — the browser handles the final BT.709→canvas-colorspace
+// transform automatically based on canvas colorSpace configuration (display-p3, srgb, etc.).
+// Applying that transform in the shader too would double-apply it (causes hue shift).
+//
+// So we only need input→sRGB matrices. Each vec3 is a COLUMN of the standard row-major
+// matrix (WGSL mat3x3 takes columns). Source: CSS Color 4 / D65 adapted.
 
-// BT.709 (sRGB primaries) to Display P3 (linear to linear)
-// Source: http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
-const MAT_BT709_TO_P3 = mat3x3<f32>(
-  vec3<f32>(0.82246197, 0.17753803, 0.00000000),
-  vec3<f32>(0.03319420, 0.96680580, 0.00000000),
-  vec3<f32>(0.01708263, 0.07239744, 0.91051993)
+// Display-P3 → BT.709
+const MAT_P3_TO_BT709 = mat3x3<f32>(
+  vec3<f32>( 1.2249401, -0.0420569, -0.0196376),  // column 0
+  vec3<f32>(-0.2249401,  1.0420569, -0.0786361),  // column 1
+  vec3<f32>( 0.0000000,  0.0000000,  1.0982737)   // column 2
 );
 
-// BT.709 to BT.2020 (linear to linear)
-const MAT_BT709_TO_BT2020 = mat3x3<f32>(
-  vec3<f32>(0.627404, 0.329283, 0.043313),
-  vec3<f32>(0.069097, 0.919541, 0.011362),
-  vec3<f32>(0.016391, 0.088013, 0.895595)
+// Rec.2020 → BT.709
+const MAT_BT2020_TO_BT709 = mat3x3<f32>(
+  vec3<f32>( 1.6604910, -0.1245505, -0.0181508),  // column 0
+  vec3<f32>(-0.5876411,  1.1328999, -0.1005789),  // column 1
+  vec3<f32>(-0.0728499, -0.0083494,  1.1187297)   // column 2
 );
 
 // === Utility Functions ===
@@ -232,18 +237,16 @@ fn applyExposure(rgb: vec3<f32>, ev: f32) -> vec3<f32> {
   return rgb * pow(2.0, ev);
 }
 
-// Apply color space transformation from BT.709 to target color space
-fn applyColorSpaceTransform(rgb: vec3<f32>, colorSpace: i32) -> vec3<f32> {
-  if (colorSpace == 1) {
-    // Display P3
-    return MAT_BT709_TO_P3 * rgb;
-  } else if (colorSpace == 2) {
-    // BT.2020
-    return MAT_BT709_TO_BT2020 * rgb;
-  } else {
-    // sRGB (BT.709) - no transform
-    return rgb;
+// Convert input image primaries to BT.709/sRGB.
+// The browser then maps BT.709 → canvas color space automatically.
+// inputCS: 0=BT.709 (identity), 1=Display-P3, 2=Rec.2020
+fn applyCST(rgb: vec3<f32>, inputCS: i32) -> vec3<f32> {
+  if (inputCS == 1) {
+    return MAT_P3_TO_BT709 * rgb;
+  } else if (inputCS == 2) {
+    return MAT_BT2020_TO_BT709 * rgb;
   }
+  return rgb;
 }
 
 // === Tone Mapping Operators ===
@@ -482,12 +485,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     rgb = vec3<f32>(0.0, 0.0, 0.0);
   }
 
+  // Convert input primaries → BT.709/sRGB. Canvas handles BT.709 → its colorspace.
+  rgb = applyCST(rgb, i32(uniforms.inputColorSpace));
+
   // Apply exposure
   rgb = applyExposure(rgb, uniforms.exposure);
 
   var color: vec3<f32>;
   let vizMode = i32(uniforms.visualizationMode);
-  let colorSpace = i32(uniforms.colorSpace);
 
   // HDR mode: Use standard (non-linear) color spaces with explicit encoding
   if (uniforms.hdrMode > 0.5) {
@@ -515,7 +520,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        color = srgbOEFT(color);
+        color = srgbOEFT(rgb);
       }
     } else {
       // RGB mode: Apply color space transform + encoding
@@ -531,8 +536,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       let lum = luminance(tonemapped);
       color = turboColormap(lum);
     } else if (vizMode == 2) {
-      // Clipping visualization
-      let clipped = any(tonemapped > vec3<f32>(1.0));
+      // Clipping visualization: show which pixels have linear values > 1.0 (HDR content lost in SDR)
+      // Must check rgb *before* tone mapping — tonemapped is already clamped to [0,1]
+      let clipped = any(rgb > vec3<f32>(1.0));
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta
       } else {

@@ -19,7 +19,7 @@ import { GPUContextManager } from './GPUContextManager';
 import type { Renderer, RenderOptions } from './Renderer';
 import { RenderPipelineManager } from './RenderPipelineManager';
 import {
-  getColorSpaceIndex,
+  getInputColorSpaceIndex,
   getObjectFitIndex,
   getToneMappingIndex,
   getTransferFunctionIndex,
@@ -154,7 +154,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       getToneMappingIndex(options.toneMapping),
       getVisualizationModeIndex(options.visualizationMode),
       options.hdrMode ? 1.0 : 0.0,
-      getColorSpaceIndex(options.colorSpace),
+      getInputColorSpaceIndex(textureInfo.colorPrimaries),
       options.viewport.zoom,
       options.viewport.panX,
       options.viewport.panY,
@@ -165,7 +165,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       getObjectFitIndex(options.objectFit),
       imageWidth / this.canvas.width, // pixelScaleX: fraction of canvas the image occupies at 1:1
       imageHeight / this.canvas.height, // pixelScaleY: fraction of canvas the image occupies at 1:1
-      0.0, // padding for 16-byte alignment
+      0.0, // padding
     ]);
 
     const device = this.contextManager.getDevice();
@@ -297,7 +297,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
         getToneMappingIndex(options.toneMapping),
         getVisualizationModeIndex(options.visualizationMode),
         options.hdrMode ? 1.0 : 0.0,
-        getColorSpaceIndex(options.colorSpace),
+        getInputColorSpaceIndex(textureInfo.colorPrimaries),
         options.viewport.zoom,
         options.viewport.panX,
         options.viewport.panY,

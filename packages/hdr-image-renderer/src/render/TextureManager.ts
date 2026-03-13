@@ -7,7 +7,7 @@
 
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
-import type { ImageData, LinearImageData, TransferFunction } from '../types';
+import type { ColorPrimaries, ImageData, LinearImageData, TransferFunction } from '../types';
 import { GPUImagePreprocessor } from './GPUImagePreprocessor';
 import type { ImagePreprocessor } from './ImagePreprocessor';
 
@@ -16,6 +16,7 @@ export interface TextureInfo {
   height: number;
   format: GPUTextureFormat;
   transferFunction: TransferFunction;
+  colorPrimaries?: ColorPrimaries;
 }
 
 export class TextureManager {
@@ -24,6 +25,7 @@ export class TextureManager {
   private imageHeight = 1;
   private currentTextureFormat: GPUTextureFormat = 'rgba32float';
   private currentTransferFunction: TransferFunction = 'linear';
+  private currentColorPrimaries: ColorPrimaries | undefined = undefined;
   private preprocessor: ImagePreprocessor;
 
   constructor(
@@ -63,6 +65,7 @@ export class TextureManager {
     this.imageWidth = image.width;
     this.imageHeight = image.height;
     this.currentTransferFunction = image.transferFunction;
+    this.currentColorPrimaries = image.colorPrimaries;
 
     // Destroy old texture if exists
     if (this.texture) {
@@ -138,6 +141,7 @@ export class TextureManager {
       height: this.imageHeight,
       format: this.currentTextureFormat,
       transferFunction: this.currentTransferFunction,
+      colorPrimaries: this.currentColorPrimaries,
     };
   }
 

@@ -67,6 +67,8 @@ export interface EncodedImageData {
   channels: 3 | 4;
   /** Transfer function applied to the data */
   transferFunction: 'srgb' | 'pq';
+  /** Source color primaries / gamut, if known */
+  colorPrimaries?: ColorPrimaries;
   /**
    * Bit depth of the encoded data (8, 10, 12, or 16 bits per channel)
    * For Uint8Array: always 8

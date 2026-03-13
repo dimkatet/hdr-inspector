@@ -5,7 +5,7 @@
  * These indices must match the shader code expectations.
  */
 
-import type { ColorSpace, ObjectFit, TransferFunction } from '../types';
+import type { ColorPrimaries, ColorSpace, ObjectFit, TransferFunction } from '../types';
 
 /**
  * Convert tone mapping mode to shader index
@@ -48,8 +48,6 @@ export function getColorSpaceIndex(colorSpace: ColorSpace): number {
       return 0;
     case 'display-p3':
       return 1;
-    case 'rec2020':
-      return 2;
   }
 }
 
@@ -68,6 +66,23 @@ export function getObjectFitIndex(objectFit: ObjectFit): number {
       return 3;
     case 'scale-down':
       return 4;
+  }
+}
+
+/**
+ * Convert image color primaries to shader index for input color space transform.
+ * Index 0 = BT.709/sRGB (default), 1 = Display-P3, 2 = Rec.2020
+ */
+export function getInputColorSpaceIndex(primaries?: ColorPrimaries): number {
+  switch (primaries) {
+    case 'display-p3':
+    case 'dci-p3':
+      return 1;
+    case 'bt2020':
+      return 2;
+    default:
+      // bt709, bt601, bt470m, bt470bg, smpte240, aces, acescg, xyz, generic-film, undefined
+      return 0;
   }
 }
 
