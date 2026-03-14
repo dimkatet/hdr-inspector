@@ -9,7 +9,7 @@ export interface HDRCapabilities {
   videoHDR: boolean; // Browser can play HDR video (e.g., Netflix)
   canvasHDR: boolean; // Browser supports HDR canvas (WebGPU)
   webgpuSupported: boolean; // WebGPU API available
-  colorGamut: 'srgb' | 'p3' | 'rec2020'; // Widest supported color gamut
+  colorGamut: 'srgb' | 'p3'; // Widest supported color gamut
   colorDepth: number; // Bits per channel (8, 10, etc.)
   pixelRatio: number; // Device pixel ratio
 }
@@ -22,10 +22,8 @@ export async function detectHDRCapabilities(): Promise<HDRCapabilities> {
   const displayHDR = window.matchMedia('(dynamic-range: high)').matches;
 
   // 2. Detect widest supported color gamut
-  let colorGamut: 'srgb' | 'p3' | 'rec2020' = 'srgb';
-  if (window.matchMedia('(color-gamut: rec2020)').matches) {
-    colorGamut = 'rec2020';
-  } else if (window.matchMedia('(color-gamut: p3)').matches) {
+  let colorGamut: 'srgb' | 'p3' = 'srgb';
+  if (window.matchMedia('(color-gamut: p3)').matches) {
     colorGamut = 'p3';
   }
 

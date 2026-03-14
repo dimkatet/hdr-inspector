@@ -74,7 +74,7 @@ export class GPUContextManager {
         device: this.device,
         format: this.supportsHDR ? 'rgba16float' : preferredFormat,
         alphaMode: this.config.transparent ? 'premultiplied' : 'opaque',
-        colorSpace: preferredColorSpace as PredefinedColorSpace,
+        colorSpace: preferredColorSpace,
       };
 
       // CRITICAL: toneMapping.mode = 'extended' tells the browser:
@@ -92,7 +92,7 @@ export class GPUContextManager {
         toneMapping: config.toneMapping,
       });
     } catch (error) {
-      // If preferred color space fails (e.g., rec2020 on Safari), fallback
+      // If preferred color space fails, fallback
       this.logger.warn('[GPUContextManager] Failed to configure with', preferredColorSpace, error);
 
       const fallback = 'srgb';
@@ -146,38 +146,6 @@ export class GPUContextManager {
   }
 
   /**
-   * Map ColorSpace to canvas color space
-   *
-   * @param renderMode - Render mode containing colorSpace and hdrMode
-   *
-   * Both HDR and SDR modes use standard (non-linear) color spaces:
-   * - 'srgb', 'display-p3', 'rec2020'
-   * - Linear variants ('srgb-linear', 'display-p3-linear') are experimental
-   *   and not widely supported, so we use standard color spaces everywhere
-   *
-   * HDR mode:
-   * - Shader applies color space transform + sRGB transfer function
-   * - Values > 1.0 are preserved in rgba16float buffer
-   * - toneMapping: extended mode passes HDR values to display
-   *
-   * SDR mode:
-   * - Shader applies tone mapping + color space transform + sRGB transfer function
-   * - Values clamped to [0, 1] for bgra8unorm buffer
-   */
-  getCanvasColorSpace(renderMode: WebGPURenderMode): 'srgb' | 'display-p3' | 'rec2020' {
-    const { colorSpace } = renderMode;
-
-    // Use standard (non-linear) color spaces for both HDR and SDR
-    if (colorSpace === 'display-p3') {
-      return 'display-p3';
-    }
-    if (colorSpace === 'rec2020') {
-      return 'rec2020';
-    }
-    return 'srgb';
-  }
-
-  /**
    * Reconfigure canvas when HDR mode or color space changes
    */
   reconfigure(renderMode: WebGPURenderMode): void {
@@ -189,7 +157,7 @@ export class GPUContextManager {
       return;
     }
 
-    const canvasColorSpace = this.getCanvasColorSpace(renderMode);
+    const canvasColorSpace = renderMode.colorSpace;
     const preferredFormat = navigator.gpu.getPreferredCanvasFormat();
 
     this.logger.log(
@@ -203,7 +171,7 @@ export class GPUContextManager {
       device: this.device,
       format: this.supportsHDR ? 'rgba16float' : preferredFormat,
       alphaMode: this.config.transparent ? 'premultiplied' : 'opaque',
-      colorSpace: canvasColorSpace as PredefinedColorSpace,
+      colorSpace: canvasColorSpace,
     };
 
     if (this.supportsHDR) {

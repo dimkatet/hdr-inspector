@@ -14,9 +14,7 @@ export class WebGPUUploadService implements ImageUploadService {
   async upload(data: ImageData): Promise<ImageInfo> {
     await this.renderer.uploadImage(data);
     const info = this.getImageInfo();
-    return 'colorPrimaries' in data && data.colorPrimaries
-      ? { ...info, colorPrimaries: data.colorPrimaries }
-      : info;
+    return { ...info, colorPrimaries: data.colorPrimaries ?? 'bt709' };
   }
 
   getImageInfo(): ImageInfo {

@@ -86,10 +86,8 @@ export class ViewportController implements ViewportFacade, RuntimeService {
     // deltaX > 0: panX will decrease → approaching -maxPan edge
     // deltaX < 0: panX will increase → approaching +maxPan edge
     const EDGE = 1e-4;
-    const canX =
-      deltaX > 0 ? panX > -(maxPan - EDGE) : deltaX < 0 ? panX < maxPan - EDGE : false;
-    const canY =
-      deltaY > 0 ? panY > -(maxPan - EDGE) : deltaY < 0 ? panY < maxPan - EDGE : false;
+    const canX = deltaX > 0 ? panX > -(maxPan - EDGE) : deltaX < 0 ? panX < maxPan - EDGE : false;
+    const canY = deltaY > 0 ? panY > -(maxPan - EDGE) : deltaY < 0 ? panY < maxPan - EDGE : false;
 
     return canX || canY;
   }

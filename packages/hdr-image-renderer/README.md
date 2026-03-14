@@ -168,7 +168,7 @@ hdr.destroy()
 | `hdrMode` | `boolean` | `false` | Enable native HDR output |
 | `exposure` | `number` | `0` | Exposure in EV stops |
 | `toneMapping` | `'none' \| 'reinhard' \| 'aces'` | `'aces'` | Tone mapping operator |
-| `colorSpace` | `'srgb' \| 'display-p3' \| 'rec2020'` | `'srgb'` | Output color space |
+| `colorSpace` | `'srgb' \| 'display-p3'` | Output color space |
 | `visualizationMode` | `'rgb' \| 'luminance' \| 'clipping'` | `'rgb'` | Visualization mode |
 | `objectFit` | `'contain' \| 'cover' \| 'fill' \| 'none' \| 'scale-down'` | `'contain'` | Image layout |
 | `transparent` | `boolean` | `false` | Transparent canvas background |

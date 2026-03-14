@@ -92,7 +92,10 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
   }
   if (!loader) return null;
   return (
-    <div onTouchStart={() => console.log('touch start; capturing:', capturingRef.current)} onTouchEnd={() => console.log('touch end; capturing:', capturingRef.current)}>
+    <div
+      onTouchStart={() => console.log('touch start; capturing:', capturingRef.current)}
+      onTouchEnd={() => console.log('touch end; capturing:', capturingRef.current)}
+    >
       <HDRImage
         ref={hdrRef}
         objectFit="auto"

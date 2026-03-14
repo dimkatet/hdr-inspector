@@ -14,7 +14,7 @@ import type { CoreConfig } from './types';
  *
  * Auto-detection logic:
  * - hdrMode: enabled if display + browser support HDR canvas (canvasHDR)
- * - colorSpace: display-p3 if display reports p3/rec2020 gamut, otherwise srgb
+ * - colorSpace: display-p3 if display reports p3 gamut, otherwise srgb
  * - toneMapping: 'none' in HDR mode (browser handles HDR), 'reinhard' in SDR mode
  *
  * Explicitly passed values always take priority over auto-detection.

@@ -88,9 +88,8 @@ export function useImageLoader(
 
   // Load direct ImageData
   useEffect(() => {
-    console.log('Starting image load with direct ImageData:', image, 'Instance:', instance);
     if (!image || !instance) return;
-    console.log('Starting image load with direct ImageData:', image);
+
     instance.loading
       .upload(image)
       .then(() => {

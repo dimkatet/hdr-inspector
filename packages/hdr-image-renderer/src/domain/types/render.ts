@@ -19,7 +19,7 @@ export type VisualizationMode = 'rgb' | 'luminance' | 'clipping';
 /**
  * Color space for rendering
  */
-export type ColorSpace = 'srgb' | 'display-p3' | 'rec2020';
+export type ColorSpace = 'srgb' | 'display-p3';
 
 /**
  * Object-fit mode for image display within the canvas.
@@ -89,7 +89,7 @@ export interface RenderAPI {
   setToneMapping(operator: ToneMappingOperator): void;
   /** Enable/disable HDR mode (requires HDR-capable display) */
   setHDRMode(enabled: boolean): void;
-  /** Set output color space (srgb, display-p3, rec2020) */
+  /** Set output color space (srgb, display-p3) */
   setColorSpace(space: ColorSpace): void;
   /** Set visualization mode (rgb, luminance, clipping) */
   setVisualizationMode(mode: VisualizationMode): void;
