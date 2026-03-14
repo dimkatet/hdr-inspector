@@ -21,6 +21,7 @@ import { RenderPipelineManager } from './RenderPipelineManager';
 import {
   getInputColorSpaceIndex,
   getObjectFitIndex,
+  getOutputTransferFunctionIndex,
   getToneMappingIndex,
   getTransferFunctionIndex,
   getVisualizationModeIndex,
@@ -165,7 +166,9 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       getObjectFitIndex(options.objectFit),
       imageWidth / this.canvas.width, // pixelScaleX: fraction of canvas the image occupies at 1:1
       imageHeight / this.canvas.height, // pixelScaleY: fraction of canvas the image occupies at 1:1
-      0.0, // padding
+      1.0,                              // outputTransferFunction: sRGB EOTF⁻¹ (display)
+      textureInfo.bitDepth,             // bitDepth for sub-16 normalization
+      0.0, 0.0, 0.0,                    // _pad1, _pad2, _pad3
     ]);
 
     const device = this.contextManager.getDevice();
@@ -217,18 +220,20 @@ export class WebGPURenderer implements Renderer, RuntimeService {
   /**
    * Read pixels from rendered canvas (GPU → CPU)
    *
-   * Renders full image with current settings but ignores viewport (zoom/pan).
-   * Useful for image export functionality.
+   * Always renders to rgba16float for maximum precision.
+   * For linear float inputs, returns Float16Array (linear values).
+   * For integer-encoded inputs (sRGB/PQ), scales to Uint16Array [0, 2^bitDepth - 1].
    *
    * @param options - Render options (exposure, tone mapping, etc.)
    * @returns Pixel data + metadata
    */
   async readPixels(options: RenderOptions): Promise<{
-    pixels: Uint8Array | Uint16Array | Float32Array;
+    pixels: Uint8Array | Uint16Array | Float16Array | Float32Array;
     width: number;
     height: number;
     format: GPUTextureFormat;
     colorSpace: ColorSpace;
+    bitDepth: number;
   }> {
     if (!this.textureManager || !this.pipelineManager) {
       throw new Error('Renderer not initialized');
@@ -239,150 +244,134 @@ export class WebGPURenderer implements Renderer, RuntimeService {
     }
 
     const device = this.contextManager.getDevice();
-    const format = this.contextManager.getCanvasFormat();
     const { width: imageWidth, height: imageHeight } = this.textureManager.getImageDimensions();
     const textureInfo = this.textureManager.getTextureInfo();
-    const bytesPerPixel = format === 'rgba16float' ? 8 : 4;
 
-    // Calculate aligned bytes per row (must be multiple of 256 for WebGPU)
+    // Export always uses rgba16float for maximum precision
+    const exportFormat: GPUTextureFormat = 'rgba16float';
+    const bytesPerPixel = 8; // 4 channels × 2 bytes (float16)
     const bytesPerRow = Math.ceil((imageWidth * bytesPerPixel) / 256) * 256;
     const bufferSize = bytesPerRow * imageHeight;
 
-    // Create offscreen render target with same format as canvas
+    // Create offscreen rgba16float render target
     const renderTexture = device.createTexture({
       size: { width: imageWidth, height: imageHeight },
-      format,
+      format: exportFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
 
-    // Create staging buffer for readback
     const stagingBuffer = device.createBuffer({
       size: bufferSize,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
 
-    // Create temporary uniform buffer for offscreen render
-    // (don't touch this.uniformBuffer to avoid canvas flicker)
     const tempUniformBuffer = device.createBuffer({
-      size: 64, // Same as main uniformBuffer
+      size: 80,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    // Create temporary bind group with offscreen uniforms
+    // Get export pipeline (targets rgba16float, cached by input texture format)
+    const exportPipeline = this.pipelineManager.createExportPipeline(textureInfo.format);
+
     const tempBindGroup = device.createBindGroup({
-      layout: this.pipelineManager.getPipeline().getBindGroupLayout(0),
+      layout: exportPipeline.getBindGroupLayout(0),
       entries: [
-        {
-          binding: 0,
-          resource: this.textureManager.getTexture().createView(),
-        },
-        {
-          binding: 1,
-          resource: this.pipelineManager.getSampler(),
-        },
-        {
-          binding: 2,
-          resource: { buffer: tempUniformBuffer },
-        },
+        { binding: 0, resource: this.textureManager.getTexture().createView() },
+        { binding: 1, resource: this.pipelineManager.getSampler() },
+        { binding: 2, resource: { buffer: tempUniformBuffer } },
       ],
     });
 
     try {
-      // Prepare uniforms for full-image render (zoom=1, no pan)
       const imageAspect = imageWidth / imageHeight;
-      const canvasAspect = imageWidth / imageHeight; // 1:1 for offscreen
+
+      // outputTransferFunction: 0=linear (for float inputs), 1=sRGB, 2=PQ
+      const outputTFIndex = getOutputTransferFunctionIndex(textureInfo.transferFunction);
 
       const uniforms = new Float32Array([
         options.exposure,
         getToneMappingIndex(options.toneMapping),
         getVisualizationModeIndex(options.visualizationMode),
         options.hdrMode ? 1.0 : 0.0,
-        getInputColorSpaceIndex(textureInfo.colorPrimaries),
+        0.0, // inputColorSpace: no CST for export (preserve original gamut)
         options.viewport.zoom,
         options.viewport.panX,
         options.viewport.panY,
         imageAspect,
-        canvasAspect,
+        imageAspect, // canvasAspect = imageAspect for 1:1 offscreen
         this.transparent ? 1.0 : 0.0,
         getTransferFunctionIndex(textureInfo.transferFunction),
         getObjectFitIndex(options.objectFit),
         1.0, // pixelScaleX: 1:1 pixel mapping
         1.0, // pixelScaleY: 1:1 pixel mapping
-        0.0, // padding
+        outputTFIndex,        // outputTransferFunction
+        textureInfo.bitDepth, // bitDepth for sub-16 normalization
+        0.0, 0.0, 0.0,        // _pad1, _pad2, _pad3
       ]);
       device.queue.writeBuffer(tempUniformBuffer, 0, uniforms.buffer);
 
-      // Create command encoder
       const commandEncoder = device.createCommandEncoder();
 
-      // Render to offscreen texture
       const renderPass = commandEncoder.beginRenderPass({
-        colorAttachments: [
-          {
-            view: renderTexture.createView(),
-            loadOp: 'clear',
-            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
-            storeOp: 'store',
-          },
-        ],
+        colorAttachments: [{
+          view: renderTexture.createView(),
+          loadOp: 'clear',
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
+          storeOp: 'store',
+        }],
       });
 
-      renderPass.setPipeline(this.pipelineManager.getPipeline());
-      renderPass.setBindGroup(0, tempBindGroup); // Use temporary bind group
-      renderPass.draw(4); // Fullscreen quad
+      renderPass.setPipeline(exportPipeline);
+      renderPass.setBindGroup(0, tempBindGroup);
+      renderPass.draw(4);
       renderPass.end();
 
-      // Copy texture to staging buffer
       commandEncoder.copyTextureToBuffer(
         { texture: renderTexture },
         { buffer: stagingBuffer, bytesPerRow },
         { width: imageWidth, height: imageHeight }
       );
 
-      // Submit commands
       device.queue.submit([commandEncoder.finish()]);
 
-      // Wait for GPU operations to complete and map buffer
       await stagingBuffer.mapAsync(GPUMapMode.READ);
       const mappedRange = stagingBuffer.getMappedRange();
 
-      // Extract pixel data based on format
       const processor = this.textureManager.getProcessor();
-      let pixels: Uint8Array | Uint16Array | Float32Array;
-      if (format === 'rgba16float') {
-        // For HDR, read as Uint16Array (raw bits)
-        const rawData = new Uint16Array(mappedRange.slice(0));
-        pixels = processor.unpadRows(rawData, imageWidth, imageHeight, bytesPerRow, 2);
-      } else {
-        // For SDR, read as Uint8Array
-        const rawData = new Uint8Array(mappedRange.slice(0));
-        const unpaddedPixels = processor.unpadRows(
-          rawData,
-          imageWidth,
-          imageHeight,
-          bytesPerRow,
-          1
-        );
-
-        // Convert BGRA to RGBA if needed (bgra8unorm is common preferred format)
-        if (format === 'bgra8unorm' && unpaddedPixels instanceof Uint8Array) {
-          pixels = processor.bgraToRgba(unpaddedPixels);
-        } else {
-          pixels = unpaddedPixels;
-        }
-      }
+      const rawData = new Float16Array(mappedRange.slice(0));
+      const readbackPixels = processor.unpadRows(
+        rawData,
+        imageWidth,
+        imageHeight,
+        bytesPerRow,
+        2
+      ) as Float16Array;
 
       stagingBuffer.unmap();
+
+      // For linear float inputs: return Float16Array (linear values)
+      // For integer-encoded inputs (sRGB/PQ): scale to Uint16Array [0, 2^bitDepth - 1]
+      let pixels: Uint8Array | Uint16Array | Float16Array | Float32Array;
+      if (textureInfo.transferFunction === 'linear') {
+        pixels = readbackPixels;
+      } else {
+        const maxVal = (2 ** textureInfo.bitDepth) - 1;
+        const uint16 = new Uint16Array(readbackPixels.length);
+        for (let i = 0; i < readbackPixels.length; i++) {
+          uint16[i] = Math.round(Math.min(Math.max(readbackPixels[i], 0), 1) * maxVal);
+        }
+        pixels = uint16;
+      }
 
       return {
         pixels,
         width: imageWidth,
         height: imageHeight,
-        format,
+        format: exportFormat,
         colorSpace: options.colorSpace,
+        bitDepth: textureInfo.bitDepth,
       };
     } finally {
-      // Cleanup all temporary resources
       tempUniformBuffer.destroy();
       renderTexture.destroy();
       stagingBuffer.destroy();

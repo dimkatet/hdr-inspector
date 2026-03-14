@@ -22,6 +22,7 @@ export type {
   DisplayedImageType,
   EncodedImageData,
   ExportAPI,
+  ExportDownloadOptions,
   ExportOptions,
   HDRCanvasOptions,
   IHDRCanvas,

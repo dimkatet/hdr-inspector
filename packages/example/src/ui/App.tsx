@@ -4,17 +4,25 @@
  * Demonstrates usage of @dimkatet/hdr-canvas package
  */
 
-import type { ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
+import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
 import { detectHDRCapabilities } from '@dimkatet/hdr-canvas';
 import {
   type AutoWorkerClient,
   CodecLoadError,
   createWorkerPool,
+  decode,
   decodeInWorker,
-  detectFormat,
+  type ImageDescriptor,
+  type ImageFormat,
 } from '@dimkatet/jcodecs-auto';
 // import { decodeAuto, detectFormat, DecodeError } from '../decoders';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createOriginalFormatEncoder,
+  ENCODABLE_FORMATS,
+  FORMAT_LABELS,
+  getFormatExtension,
+} from '../utils/exportEncoder';
 import { syntheticImages } from '../utils/syntheticImages';
 import { Controls } from './Controls';
 import { FileDrop } from './FileDrop';
@@ -34,6 +42,10 @@ function App() {
   // Single render state: starts empty (all undefined → library auto-detects),
   // populated by onRenderStateSync after image load, updated on user changes.
   const [renderOptions, setRenderOptions] = useState<Partial<RenderState>>({});
+  const [originalFormat, setOriginalFormat] = useState<Exclude<ImageFormat, 'unknown'> | null>(
+    null
+  );
+  const [originalDescriptor, setOriginalDescriptor] = useState<ImageDescriptor | null>(null);
 
   const handleUserOptionsChange = useCallback((changes: Partial<RenderState>) => {
     setRenderOptions((prev) => ({ ...prev, ...changes }));
@@ -51,7 +63,7 @@ function App() {
 
   useEffect(() => {
     console.log('[App] Initializing decode worker pool...');
-    createWorkerPool({ poolSize: 16, preferMT: true, type: 'decoder' })
+    createWorkerPool({ poolSize: 8, preferMT: false, type: 'decoder', lazy: true })
       .then((client) => {
         setDecodeClient(client);
       })
@@ -120,59 +132,57 @@ function App() {
     [handleMultipleFiles]
   );
 
-  const handleFileLoaded = useCallback(
-    async (file: File) => {
-      try {
-        setError(null);
-        setFilename(file.name);
+  const handleFileLoaded = useCallback(async (file: File) => {
+    try {
+      setError(null);
+      setFilename(file.name);
 
-        if (!decodeClient) {
-          setError('Decode client is not initialized');
-          return;
-        }
+      const arrayBuffer = await file.arrayBuffer();
 
-        // Read file as ArrayBuffer
-        const arrayBuffer = await file.arrayBuffer();
+      // decode() runs on the main thread — fine for single files
+      const decoding = decode(arrayBuffer);
 
-        // Detect format
-        const format = detectFormat(arrayBuffer);
-        console.log('[App] Detected format:', format);
+      // Store descriptor for re-encoding (small plain object, safe in state)
+      decoding
+        .then(({ descriptor, format }) => {
+          if (format !== 'unknown') {
+            setOriginalFormat(format);
+            setOriginalDescriptor(descriptor);
+          }
+        })
+        .catch(() => {});
 
-        if (format === 'unknown') {
-          throw new Error(`Unsupported format: ${file.name}`);
-        }
-
-        // Use auto-decoder for AVIF, JXL, Gainmap, PNG
-        console.log('[App] Using auto-decoder for:', format);
-        const decoding = decodeInWorker(decodeClient, arrayBuffer);
-        // Wrap in a loader function so the raw Float32Array/Uint16Array never enters
-        // React state — prevents React DevTools from serializing large typed arrays in dev mode.
-
-        setImageLoader(
-          // @ts-expect-error
-          () => () =>
-            decoding.then(({ data, descriptor }) => ({
+      // Wrap in a loader function so the raw Float32Array/Uint16Array never enters
+      // React state — prevents React DevTools from serializing large typed arrays in dev mode.
+      setImageLoader(
+        // @ts-expect-error
+        () => () =>
+          decoding.then(({ data, descriptor }) => {
+            console.log(
+              `[load] decoded pixels (${data.constructor.name}, bitDepth=${descriptor.numeric.bitDepth}):`,
+              data.slice(0, 16)
+            );
+            return {
               data,
               width: descriptor.geometry.width,
               height: descriptor.geometry.height,
               channels: descriptor.channels.count,
               transferFunction: descriptor.transfer?.function,
               bitDepth: descriptor.numeric.bitDepth,
-              colorPrimaries: descriptor.color?.primaries, // need mapping
-            }))
-        );
-      } catch (err) {
-        if (err instanceof CodecLoadError) {
-          setError(`Decode error: ${err.message}`);
-        } else {
-          setError(err instanceof Error ? err.message : 'Failed to load image');
-        }
-        console.error('Load error:', err);
-        setImageLoader(undefined);
+              colorPrimaries: descriptor.color?.primaries,
+            };
+          })
+      );
+    } catch (err) {
+      if (err instanceof CodecLoadError) {
+        setError(`Decode error: ${err.message}`);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load image');
       }
-    },
-    [decodeClient]
-  );
+      console.error('Load error:', err);
+      setImageLoader(undefined);
+    }
+  }, []);
 
   const handleSingleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,6 +192,16 @@ function App() {
     },
     [handleFileLoaded]
   );
+
+  // Create re-encode function when format is known and encodable
+  const encoder = useMemo<ImageEncoder | undefined>(() => {
+    if (!originalFormat || !originalDescriptor) return undefined;
+    if (!(ENCODABLE_FORMATS as readonly string[]).includes(originalFormat)) return undefined;
+    return createOriginalFormatEncoder(originalFormat, originalDescriptor);
+  }, [originalFormat, originalDescriptor]);
+
+  const originalFormatLabel = originalFormat ? FORMAT_LABELS[originalFormat] : undefined;
+  const originalFormatExtension = originalFormat ? getFormatExtension(originalFormat) : undefined;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', color: '#fff' }}>
@@ -384,6 +404,9 @@ function App() {
                 loader={imageLoader}
                 options={renderOptions}
                 onRenderStateSync={handleRenderStateSync}
+                encoder={encoder}
+                originalFormatLabel={originalFormatLabel}
+                originalFormatExtension={originalFormatExtension}
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                 <button
@@ -406,6 +429,8 @@ function App() {
                   onClick={() => {
                     setImageLoader(undefined);
                     setRenderOptions({});
+                    setOriginalFormat(null);
+                    setOriginalDescriptor(null);
                   }}
                   style={{
                     padding: '8px 16px',

@@ -10,6 +10,7 @@ export type { CanvasAPI } from './canvas';
 // Export domain
 export type {
   ExportAPI,
+  ExportDownloadOptions,
   ExportOptions,
   ImageEncoder,
   PixelReadback,

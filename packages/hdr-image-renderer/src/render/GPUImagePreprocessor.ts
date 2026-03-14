@@ -74,8 +74,8 @@ export class GPUImagePreprocessor implements ImagePreprocessor {
       bitDepth = 8;
     }
 
-    // Preprocessing needed if: RGB (not RGBA) OR Uint16 with non-16-bit depth
-    const needsPreprocessing = image.channels !== 4 || (dataType === 1 && bitDepth !== 16);
+    // Preprocessing needed if: RGB (not RGBA) — bit depth normalization moved to fragment shader
+    const needsPreprocessing = image.channels !== 4;
 
     return {
       textureFormat,
@@ -182,12 +182,12 @@ export class GPUImagePreprocessor implements ImagePreprocessor {
   }
 
   unpadRows(
-    data: Uint8Array | Uint16Array,
+    data: Uint8Array | Uint16Array | Float16Array,
     width: number,
     height: number,
     bytesPerRow: number,
     bytesPerChannel: number
-  ): Uint8Array | Uint16Array {
+  ): Uint8Array | Uint16Array | Float16Array {
     const actualBytesPerRow = width * 4 * bytesPerChannel;
 
     if (bytesPerRow === actualBytesPerRow) {
@@ -198,7 +198,11 @@ export class GPUImagePreprocessor implements ImagePreprocessor {
     const totalElements = elementsPerRow * height;
 
     const result =
-      data instanceof Uint16Array ? new Uint16Array(totalElements) : new Uint8Array(totalElements);
+      data instanceof Float16Array
+        ? new Float16Array(totalElements)
+        : data instanceof Uint16Array
+          ? new Uint16Array(totalElements)
+          : new Uint8Array(totalElements);
 
     const paddedElementsPerRow = bytesPerRow / bytesPerChannel;
 

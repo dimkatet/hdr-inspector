@@ -99,22 +99,21 @@ export class ExportManager implements ExportAPI {
       return new Uint8ClampedArray(pixels);
     }
 
-    // For Float32Array (HDR), tone map to 8-bit
-    if (pixels instanceof Float32Array) {
+    // Uint16Array: scale 16-bit [0, 65535] → [0, 255]
+    if (pixels instanceof Uint16Array) {
       const result = new Uint8ClampedArray(pixelCount);
       for (let i = 0; i < pixelCount; i++) {
-        // Simple clamp [0, 1] → [0, 255]
-        // Note: values > 1.0 will be clamped (HDR data lost for PNG)
-        result[i] = Math.round(Math.min(Math.max(pixels[i], 0), 1) * 255);
+        result[i] = Math.round(pixels[i] / 257); // 65535/255 = 257
       }
       return result;
     }
 
-    // For Uint16Array, downscale to 8-bit
-    if (pixels instanceof Uint16Array) {
+    // For Float16Array or Float32Array (HDR), clamp to [0,1] → [0,255]
+    // Note: HDR values > 1.0 are clamped — HDR range lost for PNG/JPEG export
+    if (pixels instanceof Float16Array || pixels instanceof Float32Array) {
       const result = new Uint8ClampedArray(pixelCount);
       for (let i = 0; i < pixelCount; i++) {
-        result[i] = Math.round((pixels[i] / 65535) * 255);
+        result[i] = Math.round(Math.min(Math.max(pixels[i], 0), 1) * 255);
       }
       return result;
     }

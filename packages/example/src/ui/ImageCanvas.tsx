@@ -4,20 +4,160 @@
  * Demonstrates usage of @dimkatet/hdr-canvas React component
  */
 
-import type { ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
-import { HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
-import { useCallback, useRef, useState } from 'react';
+import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
+import { type ExportActions, HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface ImageCanvasProps {
   loader?: ImageLoader;
   options?: Partial<RenderState>;
   onRenderStateSync?: (state: RenderState) => void;
+  /** Custom encoder for re-encoding to original source format */
+  encoder?: ImageEncoder;
+  /** Human-readable label for the original format (e.g. 'JPEG XL') */
+  originalFormatLabel?: string;
+  /** File extension for the original format (e.g. 'jxl') */
+  originalFormatExtension?: string;
 }
 
-export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasProps) {
+interface ExportMenuProps {
+  actions: ExportActions;
+  position: { x: number; y: number } | null;
+  onClose: () => void;
+  encoder?: ImageEncoder;
+  originalFormatLabel?: string;
+  originalFormatExtension?: string;
+}
+
+// Context-menu style export dropdown, rendered at fixed viewport coordinates
+function ExportMenu({
+  actions,
+  position,
+  onClose,
+  encoder,
+  originalFormatLabel,
+  originalFormatExtension,
+}: ExportMenuProps) {
+  const [busy, setBusy] = useState(false);
+
+  const run = useCallback(
+    async (fn: () => Promise<void>) => {
+      setBusy(true);
+      try {
+        await fn();
+      } catch (err) {
+        console.error('Export failed:', err);
+      } finally {
+        setBusy(false);
+        onClose();
+      }
+    },
+    [onClose]
+  );
+
+  if (!position) return null;
+
+  const itemStyle: React.CSSProperties = {
+    display: 'block',
+    width: '100%',
+    padding: '8px 16px',
+    background: 'none',
+    border: 'none',
+    color: busy ? 'rgba(255,255,255,0.4)' : '#fff',
+    textAlign: 'left',
+    cursor: busy ? 'not-allowed' : 'pointer',
+    fontSize: '13px',
+    whiteSpace: 'nowrap',
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: position.y,
+        left: position.x,
+        background: 'rgba(30,30,30,0.95)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 6,
+        overflow: 'hidden',
+        minWidth: 150,
+        boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+        pointerEvents: 'auto',
+        zIndex: 1000,
+      }}
+    >
+      <button
+        type="button"
+        style={itemStyle}
+        disabled={busy}
+        onMouseEnter={(e) => {
+          if (!busy) e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'none';
+        }}
+        onClick={() => run(() => actions.download({ type: 'image/png' }))}
+      >
+        Download PNG
+      </button>
+      <button
+        type="button"
+        style={itemStyle}
+        disabled={busy}
+        onMouseEnter={(e) => {
+          if (!busy) e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'none';
+        }}
+        onClick={() => run(() => actions.download({ type: 'image/jpeg', quality: 0.92 }))}
+      >
+        Download JPEG
+      </button>
+
+      {encoder && originalFormatLabel && (
+        <>
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '2px 0' }} />
+          <button
+            type="button"
+            style={itemStyle}
+            disabled={busy}
+            onMouseEnter={(e) => {
+              if (!busy) e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'none';
+            }}
+            onClick={() =>
+              run(() =>
+                actions.download({
+                  encoder,
+                  extension: originalFormatExtension,
+                })
+              )
+            }
+          >
+            Download as {originalFormatLabel}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function ImageCanvas({
+  loader,
+  options,
+  onRenderStateSync,
+  encoder,
+  originalFormatLabel,
+  originalFormatExtension,
+}: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const hdrRef = useRef<HDRImageHandle>(null);
 
   const handleError = useCallback((err: Error) => {
@@ -32,29 +172,22 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
       onRenderStateSync?.(effectiveState);
     }
   }, [onRenderStateSync]);
+
   const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
 
-  const handleExport = useCallback(async () => {
-    if (!hdrRef.current) return;
-
-    try {
-      setExporting(true);
-      const blob = await hdrRef.current.export({ type: 'image/png' });
-
-      // Download the exported PNG
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `hdr-export-${Date.now()}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export failed:', err);
-      setError(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
-    }
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenuPos({ x: e.clientX, y: e.clientY });
   }, []);
+
+  const closeMenu = useCallback(() => setMenuPos(null), []);
+
+  // Close menu on any click outside
+  useEffect(() => {
+    if (!menuPos) return;
+    window.addEventListener('click', closeMenu);
+    return () => window.removeEventListener('click', closeMenu);
+  }, [menuPos, closeMenu]);
 
   // Button style
   const btnStyle: React.CSSProperties = {
@@ -108,6 +241,7 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
         onLoad={handleLoad}
         onError={handleError}
         onZoom={handleZoom}
+        onContextMenu={handleContextMenu}
         onGestureChange={(capturing, type) => {
           console.log('Gesture change:', capturing, type);
           capturingRef.current = capturing;
@@ -121,6 +255,16 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
           animationDuration: 100,
           keyboard: true, // Enable keyboard controls with default settings
         }}
+        exportMenu={(actions) => (
+          <ExportMenu
+            actions={actions}
+            position={menuPos}
+            onClose={closeMenu}
+            encoder={encoder}
+            originalFormatLabel={originalFormatLabel}
+            originalFormatExtension={originalFormatExtension}
+          />
+        )}
         style={{
           display: 'block',
           // height: '70%',
@@ -157,32 +301,6 @@ export function ImageCanvas({ loader, options, onRenderStateSync }: ImageCanvasP
         </button>
         <button type="button" style={btnStyle} onClick={() => hdrRef.current?.resetViewport()}>
           Reset
-        </button>
-
-        {/* Separator */}
-        <div
-          style={{
-            width: '1px',
-            height: '24px',
-            backgroundColor: '#555',
-            margin: '0 4px',
-          }}
-        />
-
-        {/* Export button */}
-        <button
-          type="button"
-          style={{
-            ...btnStyle,
-            backgroundColor: exporting ? '#666' : '#4a9eff',
-            cursor: exporting ? 'not-allowed' : 'pointer',
-            opacity: exporting ? 0.6 : 1,
-            minWidth: '100px',
-          }}
-          onClick={handleExport}
-          disabled={exporting}
-        >
-          {exporting ? 'Exporting...' : 'Export PNG'}
         </button>
       </div>
     </div>

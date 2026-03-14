@@ -99,3 +99,18 @@ export function getTransferFunctionIndex(transferFunction: TransferFunction): nu
       return 2;
   }
 }
+
+/**
+ * Get output transfer function index for shader
+ * 0=linear (no encoding), 1=sRGB EOTF⁻¹, 2=PQ EOTF⁻¹
+ */
+export function getOutputTransferFunctionIndex(tf: TransferFunction): number {
+  switch (tf) {
+    case 'linear':
+      return 0;
+    case 'pq':
+      return 2;
+    default:
+      return 1; // sRGB
+  }
+}

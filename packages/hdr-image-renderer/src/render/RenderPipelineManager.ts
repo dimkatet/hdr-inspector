@@ -20,6 +20,7 @@ export class RenderPipelineManager {
   private sampler: GPUSampler | null = null;
   private uniformBuffer: GPUBuffer | null = null;
   private currentTextureFormat: GPUTextureFormat | null = null;
+  private exportPipelines = new Map<GPUTextureFormat, GPURenderPipeline>();
 
   constructor(
     private device: GPUDevice,
@@ -30,12 +31,13 @@ export class RenderPipelineManager {
    * Initialize uniform buffer
    */
   initialize(): void {
-    // Create uniform buffer (16 floats * 4 bytes = 64 bytes)
-    // Fields: exposure, toneMapping, visualizationMode, hdrMode, colorSpace,
-    //         zoom, panX, panY, imageAspect, canvasAspect, transparent, transferFunction,
-    //         objectFit, pixelScaleX, pixelScaleY, padding
+    // Create uniform buffer (20 floats * 4 bytes = 80 bytes)
+    // Fields: exposure, toneMapping, visualizationMode, hdrMode, inputColorSpace,
+    //         zoom, panX, panY, imageAspect, canvasAspect, transparent, inputTransferFunction,
+    //         objectFit, pixelScaleX, pixelScaleY, outputTransferFunction, bitDepth,
+    //         _pad1, _pad2, _pad3
     this.uniformBuffer = this.device.createBuffer({
-      size: 64,
+      size: 80,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -211,6 +213,45 @@ export class RenderPipelineManager {
   }
 
   /**
+   * Get (or lazily create) a render pipeline targeting rgba16float for export.
+   * Cached by input texture format. Does not affect the display pipeline or bind group.
+   */
+  createExportPipeline(textureFormat: GPUTextureFormat): GPURenderPipeline {
+    const cached = this.exportPipelines.get(textureFormat);
+    if (cached) return cached;
+
+    const shaderModule = this.device.createShaderModule({
+      code: `${vertexShaderWGSL}\n\n${fragmentShaderWGSL}`,
+    });
+
+    const sampleType = textureFormat === 'rgba32float' ? 'unfilterable-float' : 'float';
+    const samplerType = textureFormat === 'rgba32float' ? 'non-filtering' : 'filtering';
+
+    const bindGroupLayout = this.device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: samplerType } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      ],
+    });
+
+    const pipeline = this.device.createRenderPipeline({
+      layout: this.device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+      vertex: { module: shaderModule, entryPoint: 'vs_main' },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'fs_main',
+        targets: [{ format: 'rgba16float' }],
+      },
+      primitive: { topology: 'triangle-strip' },
+    });
+
+    this.exportPipelines.set(textureFormat, pipeline);
+    this.logger.log('[RenderPipelineManager] Export pipeline created for format:', textureFormat);
+    return pipeline;
+  }
+
+  /**
    * Cleanup resources
    */
   destroy(): void {
@@ -221,6 +262,7 @@ export class RenderPipelineManager {
     this.pipeline = null;
     this.bindGroup = null;
     this.sampler = null;
+    this.exportPipelines.clear();
     this.logger.log('[RenderPipelineManager] Destroyed');
   }
 }

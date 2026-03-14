@@ -10,8 +10,8 @@ import type { ColorSpace } from './render';
  * Pixel data read from GPU
  */
 export interface PixelReadback {
-  /** Raw pixel data (format depends on render mode: Uint8Array for SDR, Float32Array/Uint16Array for HDR) */
-  pixels: Uint8Array | Uint16Array | Float32Array;
+  /** Raw pixel data (format depends on render mode: Uint8Array for SDR, Float16Array for HDR rgba16float) */
+  pixels: Uint8Array | Uint16Array | Float16Array | Float32Array;
   /** Image width in pixels */
   width: number;
   /** Image height in pixels */
@@ -20,6 +20,8 @@ export interface PixelReadback {
   format: GPUTextureFormat;
   /** Color space used for rendering */
   colorSpace: ColorSpace;
+  /** Original bit depth of the source data (8, 10, 12, 16). For float outputs, always 16. */
+  bitDepth: number;
 }
 
 /**
@@ -51,6 +53,26 @@ export interface ExportOptions {
   quality?: number;
   /** Custom encoder for advanced formats (JXL, EXR, etc.) */
   encoder?: ImageEncoder;
+}
+
+/**
+ * Options for download-triggered export (extends ExportOptions with filename)
+ */
+export interface ExportDownloadOptions extends ExportOptions {
+  /**
+   * Base filename without extension (default: `hdr-export-<timestamp>`).
+   */
+  filename?: string;
+  /**
+   * File extension override (without dot).
+   * Default: derived from `type` ('png'/'jpg') or 'bin' for custom encoders.
+   * Use this when providing a custom encoder with a known format (e.g., 'jxl', 'avif', 'exr').
+   *
+   * @example
+   * actions.download({ encoder: jxlEncoder, extension: 'jxl', filename: 'my-image' })
+   * // → 'my-image.jxl'
+   */
+  extension?: string;
 }
 
 /**

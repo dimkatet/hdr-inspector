@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import type {
+  ExportDownloadOptions,
   ExportOptions,
   HDRCanvasOptions,
   ImageData,
@@ -80,6 +81,16 @@ export type InteractionsConfig = ViewportConfig & {
 };
 
 /**
+ * Actions passed to the `exportMenu` render prop
+ */
+export interface ExportActions {
+  /** Export rendered image as Blob */
+  toBlob: (options?: ExportOptions) => Promise<Blob>;
+  /** Export and trigger browser download */
+  download: (options?: ExportDownloadOptions) => Promise<void>;
+}
+
+/**
  * Imperative handle exposed via ref
  */
 export interface HDRImageHandle {
@@ -99,6 +110,8 @@ export interface HDRImageHandle {
   setViewport: (viewport: Partial<ViewportState>) => void;
   /** Export rendered image as Blob (PNG/JPEG by default, custom encoder via callback) */
   export: (options?: ExportOptions) => Promise<Blob>;
+  /** Export and trigger browser download */
+  download: (options?: ExportDownloadOptions) => Promise<void>;
   /** Get underlying HDRCanvas instance (advanced) */
   getCanvas: () => import('../types').IHDRCanvas | null;
 }
@@ -146,6 +159,20 @@ export interface HDRImageProps
    */
   onGestureChange?: (capturing: boolean, type: 'pan' | 'pinch' | null) => void;
   /**
+   * Render custom export UI as an overlay on the canvas.
+   * The function receives `ExportActions` with `toBlob` and `download` methods.
+   * The overlay div has `pointerEvents: none` — add `pointerEvents: auto` on your component.
+   *
+   * @example
+   * exportMenu={(actions) => (
+   *   <MyDropdown style={{ pointerEvents: 'auto' }}>
+   *     <button onClick={() => actions.download({ type: 'image/png' })}>PNG</button>
+   *     <button onClick={() => actions.download({ type: 'image/jpeg', quality: 0.9 })}>JPEG</button>
+   *   </MyDropdown>
+   * )}
+   */
+  exportMenu?: (actions: ExportActions) => React.ReactNode;
+  /**
    * Object-fit mode for image display.
    * - 'auto': Adjust canvas aspect-ratio to match image + use contain rendering (React-only)
    * - 'contain': Fit entire image within canvas, letterbox/pillarbox as needed (default)
@@ -161,6 +188,15 @@ export interface HDRImageProps
   objectFit?: ObjectFit | 'auto';
 }
 
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRImage(
   {
     image,
@@ -174,6 +210,7 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     onGestureChange,
     onZoom,
     objectFit,
+    exportMenu,
     className,
     style,
     ...rest
@@ -198,6 +235,24 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
   // Subscribe to zoom changes
   useZoomCallback(instance, onZoom);
 
+  // Stable export actions — passed to exportMenu render prop and used by the ref handle
+  const exportActions = useMemo<ExportActions>(
+    () => ({
+      toBlob: (opts) => {
+        if (!instance) throw new Error('HDRCanvas not initialized');
+        return instance.export.toBlob(opts);
+      },
+      download: async (opts) => {
+        if (!instance) throw new Error('HDRCanvas not initialized');
+        const blob = await instance.export.toBlob(opts);
+        const ext =
+          opts?.extension ?? (opts?.encoder ? 'bin' : opts?.type === 'image/jpeg' ? 'jpg' : 'png');
+        triggerDownload(blob, `${opts?.filename ?? `hdr-export-${Date.now()}`}.${ext}`);
+      },
+    }),
+    [instance]
+  );
+
   // Expose imperative handle
   useImperativeHandle(
     ref,
@@ -209,15 +264,11 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
       resetViewport: () => instance?.viewport.reset(),
       getViewport: () => instance?.viewport.getState() ?? { zoom: 1, panX: 0, panY: 0 },
       setViewport: (viewport) => instance?.viewport.setViewport(viewport),
-      export: async (options?: ExportOptions) => {
-        if (!instance) {
-          throw new Error('HDRCanvas instance not initialized');
-        }
-        return await instance.export.toBlob(options);
-      },
+      export: (opts) => exportActions.toBlob(opts),
+      download: (opts) => exportActions.download(opts),
       getCanvas: () => instance,
     }),
-    [instance]
+    [instance, exportActions]
   );
 
   // Handle image load with aspect ratio extraction (for 'auto' objectFit)
@@ -278,6 +329,21 @@ export const HDRImage = forwardRef<HDRImageHandle, HDRImageProps>(function HDRIm
     outline: 'none', // Remove focus outline for keyboard navigation
     ...style,
   };
+
+  if (exportMenu) {
+    return (
+      <div className={className} style={{ position: 'relative', ...canvasStyle }}>
+        <canvas
+          ref={canvasRef}
+          style={{ display: 'block', width: '100%', height: '100%', outline: 'none' }}
+          {...rest}
+        />
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {exportMenu(exportActions)}
+        </div>
+      </div>
+    );
+  }
 
   return <canvas ref={canvasRef} className={className} style={canvasStyle} {...rest} />;
 });

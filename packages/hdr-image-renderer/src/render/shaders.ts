@@ -75,24 +75,19 @@ fn preprocess_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
   } else if (params.dataType == 1u) {
-    // Uint16: 2 u16 per u32
+    // Uint16: 2 u16 per u32 — stored as-is (bit depth normalization in fragment shader)
     let inputU16Offset = pixelIdx * params.channels;
 
-    var r = readU16(inputU16Offset);
-    var g = readU16(inputU16Offset + 1u);
-    var b = readU16(inputU16Offset + 2u);
+    let r = readU16(inputU16Offset);
+    let g = readU16(inputU16Offset + 1u);
+    let b = readU16(inputU16Offset + 2u);
     var a: u32;
 
     if (params.channels == 3u) {
       a = 65535u;
     } else {
       a = readU16(inputU16Offset + 3u);
-      a = remapBitDepth(a, params.bitDepth);
     }
-
-    r = remapBitDepth(r, params.bitDepth);
-    g = remapBitDepth(g, params.bitDepth);
-    b = remapBitDepth(b, params.bitDepth);
 
     // Output: 2 u16 per u32, row-aligned
     let outputU32Offset = y * params.rowStrideInU32 + x * 2u;
@@ -197,7 +192,11 @@ struct Uniforms {
   objectFit: f32,         // 0=contain, 1=cover, 2=fill, 3=none, 4=scale-down
   pixelScaleX: f32,       // imageWidth / canvasWidth (fraction of canvas image occupies at 1:1)
   pixelScaleY: f32,       // imageHeight / canvasHeight (fraction of canvas image occupies at 1:1)
-  _pad: f32,              // alignment padding
+  outputTransferFunction: f32, // 0=linear, 1=sRGB EOTF⁻¹, 2=PQ EOTF⁻¹
+  bitDepth: f32,               // Input bit depth for sub-16 normalization (0–15 = normalize, 16 = skip)
+  _pad1: f32,
+  _pad2: f32,
+  _pad3: f32,
 };
 
 @group(0) @binding(2) var<uniform> uniforms: Uniforms;
@@ -338,6 +337,17 @@ fn srgbOEFT(linear: vec3<f32>) -> vec3<f32> {
   );
 }
 
+// Apply output transfer function for final encoding
+// 0=linear (no encoding), 1=sRGB EOTF⁻¹, 2=PQ EOTF⁻¹
+fn applyOutputTF(color: vec3<f32>, outputTF: i32) -> vec3<f32> {
+  if (outputTF == 0) {
+    return color;
+  } else if (outputTF == 2) {
+    return linearToPQ(color, 203.0);
+  }
+  return srgbOEFT(color);
+}
+
 // Linear to PQ (ST.2084) for HDR output
 // Input: scene-referred linear RGB where 1.0 = diffuse white
 // diffuseWhiteNits: luminance of diffuse white in nits (typically 203 nits)
@@ -455,20 +465,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   // Sample texture first (must be in uniform control flow)
   // Clamp UV to valid range for sampling
   let clampedUV = clamp(transformedUV, vec2<f32>(0.0), vec2<f32>(1.0));
-  let texel = textureSample(hdrTexture, hdrSampler, clampedUV).rgb;
+  var texelRgb = textureSample(hdrTexture, hdrSampler, clampedUV).rgb;
+
+  // Normalize sub-16-bit values stored in rgba16unorm without remapping
+  // e.g. 12-bit: stored as value/65535, need to rescale to value/4095
+  if (uniforms.bitDepth < 15.5) {
+    let maxSrcVal = pow(2.0, uniforms.bitDepth) - 1.0;
+    texelRgb = texelRgb * 65535.0 / maxSrcVal;
+  }
 
   // Decode input to linear RGB (scene-referred)
   var rgb: vec3<f32>;
   let inputTF = i32(uniforms.inputTransferFunction);
+  let outputTF = i32(uniforms.outputTransferFunction);
   if (inputTF == 1) {
     // sRGB encoded → linear
-    rgb = srgbEOTF(texel);
+    rgb = srgbEOTF(texelRgb);
   } else if (inputTF == 2) {
     // PQ encoded → linear (scene-referred, 1.0 = 203 nits)
-    rgb = pqEOTF(texel);
+    rgb = pqEOTF(texelRgb);
   } else {
     // Already linear (inputTF == 0)
-    rgb = texel;
+    rgb = texelRgb;
   }
 
   // Check if UV is outside [0, 1] range
@@ -512,19 +530,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
       let tonemapped = toneMappingReinhard(rgb);
       let lum = luminance(tonemapped);
       color = turboColormap(lum);
-      // Apply sRGB gamma for false-color visualization
-      color = srgbOEFT(color);
+      // Apply output transfer function for false-color visualization
+      color = applyOutputTF(color, outputTF);
     } else if (vizMode == 2) {
       // Clipping visualization
       let clipped = any(rgb > vec3<f32>(10.0));
       if (clipped) {
         color = vec3<f32>(1.0, 0.0, 1.0); // Magenta for clipped
       } else {
-        color = srgbOEFT(rgb);
+        color = applyOutputTF(rgb, outputTF);
       }
     } else {
       // RGB mode: Apply color space transform + encoding
-      color = srgbOEFT(rgb);
+      color = applyOutputTF(rgb, outputTF);
     }
   } else {
     // SDR mode: Apply tone mapping, color space transform, and gamma encoding
@@ -551,7 +569,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Apply gamma encoding (sRGB gamma curve)
     // Note: P3 and BT.2020 use same gamma as sRGB
-    color = srgbOEFT(color);
+    color = applyOutputTF(color, outputTF);
   }
 
   return vec4<f32>(color, 1.0);

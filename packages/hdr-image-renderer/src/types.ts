@@ -21,6 +21,7 @@ export type {
   EasingFunction,
   EncodedImageData,
   ExportAPI,
+  ExportDownloadOptions,
   ExportOptions,
   HDRCanvasOptions,
   IHDRCanvas,

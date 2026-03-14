@@ -17,6 +17,7 @@ export interface TextureInfo {
   format: GPUTextureFormat;
   transferFunction: TransferFunction;
   colorPrimaries?: ColorPrimaries;
+  bitDepth: number;
 }
 
 export class TextureManager {
@@ -26,6 +27,7 @@ export class TextureManager {
   private currentTextureFormat: GPUTextureFormat = 'rgba32float';
   private currentTransferFunction: TransferFunction = 'linear';
   private currentColorPrimaries: ColorPrimaries | undefined = undefined;
+  private currentBitDepth = 16;
   private preprocessor: ImagePreprocessor;
 
   constructor(
@@ -75,6 +77,7 @@ export class TextureManager {
     // Analyze image to determine texture format and preprocessing needs
     const analysis = this.preprocessor.analyze(image);
     this.currentTextureFormat = analysis.textureFormat;
+    this.currentBitDepth = analysis.bitDepth;
 
     // Create texture
     this.texture = this.device.createTexture({
@@ -142,6 +145,8 @@ export class TextureManager {
       format: this.currentTextureFormat,
       transferFunction: this.currentTransferFunction,
       colorPrimaries: this.currentColorPrimaries,
+      // Only applies sub-16-bit normalization for rgba16unorm textures
+      bitDepth: this.currentTextureFormat === 'rgba16unorm' ? this.currentBitDepth : 16,
     };
   }
 

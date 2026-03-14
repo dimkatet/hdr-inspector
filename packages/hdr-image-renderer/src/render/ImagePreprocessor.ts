@@ -65,12 +65,12 @@ export interface ImagePreprocessor {
    * Remove row padding from buffer (for readback operations)
    */
   unpadRows(
-    data: Uint8Array | Uint16Array,
+    data: Uint8Array | Uint16Array | Float16Array,
     width: number,
     height: number,
     bytesPerRow: number,
     bytesPerChannel: number
-  ): Uint8Array | Uint16Array;
+  ): Uint8Array | Uint16Array | Float16Array;
 
   /**
    * Cleanup resources
