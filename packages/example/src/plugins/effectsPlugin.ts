@@ -1,9 +1,13 @@
 import {
   compile,
   createAnalogGlitch,
+  createAnalogVHS,
+  createCyberpunk,
+  createDataGlitch,
   createDuotone,
   createFilmGrain,
   createLiquidGlitch,
+  createNeonSignal,
   createVignette,
   type StepParamInfo,
 } from '@dimkatet/effects-graph';
@@ -16,10 +20,14 @@ import type { HDRPlugin, PluginContext } from '@dimkatet/hdr-canvas';
 
 export const EFFECT_PRESETS = {
   'analog-glitch': { label: 'Analog Glitch', factory: () => compile(createAnalogGlitch()) },
+  'analog-vhs': { label: 'Analog VHS', factory: () => compile(createAnalogVHS()) },
+  cyberpunk: { label: 'Cyberpunk', factory: () => compile(createCyberpunk()) },
+  'data-glitch': { label: 'Data Glitch', factory: () => compile(createDataGlitch()) },
   'liquid-glitch': { label: 'Liquid Glitch', factory: () => compile(createLiquidGlitch()) },
   'film-grain': { label: 'Film Grain', factory: () => compile(createFilmGrain()) },
   duotone: { label: 'Duotone', factory: () => compile(createDuotone()) },
   vignette: { label: 'Vignette', factory: () => compile(createVignette()) },
+  'neon-signal': { label: 'Neon Signal', factory: () => compile(createNeonSignal()) },
 } as const;
 
 export type EffectPresetName = keyof typeof EFFECT_PRESETS;
@@ -85,6 +93,7 @@ export class EffectsPlugin implements HDRPlugin {
     // Add new
     if (name) {
       this.postProcessing?.addPass(this.getOrCreatePass(name));
+      console.log(`[EffectsPlugin] preset="${name}"`, this.getParamInfo());
     }
   }
 

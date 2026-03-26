@@ -5,7 +5,12 @@
  * Darkens the edges of the image with a smooth radial gradient.
  */
 
-import type { HDRPlugin, PluginContext, PostProcessingAPI, PostProcessingPass } from '@dimkatet/hdr-canvas';
+import type {
+  HDRPlugin,
+  PluginContext,
+  PostProcessingAPI,
+  PostProcessingPass,
+} from '@dimkatet/hdr-canvas';
 
 // Minimal vertex shader (same structure as library)
 const VERTEX_SHADER = /* wgsl */ `

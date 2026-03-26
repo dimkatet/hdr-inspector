@@ -65,7 +65,7 @@ export class ExportManager implements ExportAPI {
     const imageData = new ImageData(new Uint8ClampedArray(pixelsU8), data.width, data.height);
     if (ctx instanceof OffscreenCanvasRenderingContext2D) {
       ctx.putImageData(imageData, 0, 0);
-    } 
+    }
 
     // Export to blob
     const type = options?.type ?? 'image/png';
