@@ -15,14 +15,21 @@
       "import": "./dist/webgpu/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -rf dist .turbo",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["effects", "graph", "compositing", "post-processing"],
+  "keywords": [
+    "effects",
+    "graph",
+    "compositing",
+    "post-processing"
+  ],
   "author": "dimkatet",
   "license": "MIT",
   "repository": {

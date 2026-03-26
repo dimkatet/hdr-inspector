@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: { index: 'src/index.ts', 'webgpu/index': 'src/webgpu/index.ts' },
@@ -8,4 +8,4 @@ export default defineConfig({
   sourcemap: true,
   treeshake: true,
   splitting: false,
-})
+});
