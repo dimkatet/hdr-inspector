@@ -1,0 +1,42 @@
+{
+  "name": "@dimkatet/effects-graph",
+  "version": "0.1.0",
+  "description": "Pure TypeScript compositing effect graph definition and compiler",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./webgpu": {
+      "types": "./dist/webgpu/index.d.ts",
+      "import": "./dist/webgpu/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "clean": "rm -rf dist .turbo",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["effects", "graph", "compositing", "post-processing"],
+  "author": "dimkatet",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dimkatet/hdr-inspector.git",
+    "directory": "packages/effects"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.68",
+    "tsup": "^8.3.5",
+    "typescript": "~5.9.3"
+  }
+}

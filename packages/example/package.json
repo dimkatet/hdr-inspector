@@ -12,6 +12,7 @@
     "deploy": "../../scripts/deploy.sh"
   },
   "dependencies": {
+    "@dimkatet/effects-graph": "workspace:*",
     "@dimkatet/hdr-canvas": "workspace:*",
     "@dimkatet/jcodecs-auto": "^0.5.0",
     "@dimkatet/jcodecs-avif": "^0.6.1",

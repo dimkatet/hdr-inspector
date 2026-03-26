@@ -8,7 +8,9 @@ import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canva
 import { type ExportActions, HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GlitchPlugin } from '../plugins/glitchPlugin';
 import { VignettePlugin } from '../plugins/vignettePlugin';
+import { EffectParamsPanel } from './EffectParamsPanel';
 
 interface ImageCanvasProps {
   loader?: ImageLoader;
@@ -164,6 +166,12 @@ export function ImageCanvas({
   // Vignette plugin — stable instance across renders
   const vignettePlugin = useMemo(() => new VignettePlugin(false), []);
   const [vignetteEnabled, setVignetteEnabled] = useState(false);
+
+  // Glitch plugin — stable instance across renders
+  const glitchPlugin = useMemo(() => new GlitchPlugin(false), []);
+  const [glitchEnabled, setGlitchEnabled] = useState(false);
+  const [glitchParamInfo, setGlitchParamInfo] = useState(() => glitchPlugin.getParamInfo());
+
   const pluginRegisteredRef = useRef(false);
 
   const handleError = useCallback((err: Error) => {
@@ -177,13 +185,14 @@ export function ImageCanvas({
     // Register plugin once on first load (canvas instance is stable)
     if (canvas && !pluginRegisteredRef.current) {
       canvas.use(vignettePlugin);
+      canvas.use(glitchPlugin);
       pluginRegisteredRef.current = true;
     }
     const effectiveState = canvas?.render.getState();
     if (effectiveState) {
       onRenderStateSync?.(effectiveState);
     }
-  }, [onRenderStateSync, vignettePlugin]);
+  }, [onRenderStateSync, vignettePlugin, glitchPlugin]);
 
   const handleVignetteToggle = useCallback(() => {
     setVignetteEnabled((prev) => {
@@ -191,6 +200,21 @@ export function ImageCanvas({
       return !prev;
     });
   }, [vignettePlugin]);
+
+  const handleGlitchToggle = useCallback(() => {
+    setGlitchEnabled((prev) => {
+      glitchPlugin.setEnabled(!prev);
+      return !prev;
+    });
+  }, [glitchPlugin]);
+
+  const handleGlitchParamUpdate = useCallback(
+    (stepId: string, name: string, value: unknown) => {
+      glitchPlugin.updateParam(stepId, name, value);
+      setGlitchParamInfo(glitchPlugin.getParamInfo());
+    },
+    [glitchPlugin],
+  );
 
   const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
 
@@ -337,7 +361,24 @@ export function ImageCanvas({
         >
           Vignette
         </button>
+
+        {/* Glitch post-processing toggle */}
+        <button
+          type="button"
+          onClick={handleGlitchToggle}
+          style={{
+            ...btnStyle,
+            backgroundColor: glitchEnabled ? '#7c3aed' : '#333',
+            borderColor: glitchEnabled ? '#8b5cf6' : '#555',
+          }}
+        >
+          Glitch
+        </button>
       </div>
+
+      {glitchEnabled && (
+        <EffectParamsPanel paramInfo={glitchParamInfo} onUpdate={handleGlitchParamUpdate} />
+      )}
     </div>
   );
 }
