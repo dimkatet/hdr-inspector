@@ -575,3 +575,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
   return vec4<f32>(color, 1.0);
 }
 `;
+
+export const blitFragmentShaderWGSL = /* wgsl */ `
+// Blit fragment shader — fullscreen copy from rgba16float to any output format.
+// Must be combined with vertexShaderWGSL (uses VertexOutput struct and vs_main).
+
+@group(0) @binding(0) var blitTexture: texture_2d<f32>;
+@group(0) @binding(1) var blitSampler: sampler;
+
+@fragment
+fn blit_main(in: VertexOutput) -> @location(0) vec4<f32> {
+  return textureSample(blitTexture, blitSampler, in.uv);
+}
+`;

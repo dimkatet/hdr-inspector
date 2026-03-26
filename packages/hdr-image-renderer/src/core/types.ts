@@ -5,6 +5,7 @@
 import type { ImageUploadService } from '../ImageUploadService';
 import type { ViewportFacade } from '../interaction/ViewportFacade';
 import type { Logger } from '../logger';
+import type { PostProcessingAPI } from '../post-processing/PostProcessingChain';
 import type { PixelReadbackService } from '../render/PixelReadbackService';
 import type { Renderer, RendererService } from '../render/Renderer';
 import type { ResizeService } from '../render/ResizeService';
@@ -88,4 +89,5 @@ export interface ServiceMap {
   readbackService: PixelReadbackService;
   loading: LoadingAPI;
   export: ExportAPI;
+  postProcessing: PostProcessingAPI;
 }

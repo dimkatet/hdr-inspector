@@ -49,6 +49,9 @@ export interface DomainEventMap {
   'render:beforeFrame': Record<string, never>;
   'render:complete': Record<string, never>;
 
+  // Post-processing events
+  'postProcessing:changed': Record<string, never>;
+
   // Canvas/Control events
   'canvas:resized': {
     width: number;

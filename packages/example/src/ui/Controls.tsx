@@ -52,7 +52,7 @@ export function Controls({ displayState, onUserOptionsChange, hdrAvailable }: Co
           step="0.1"
           value={displayState.exposure}
           onChange={(e) => handleExposureChange(Number.parseFloat(e.target.value))}
-          style={{ width: '100%' }}
+          style={{ width: '100%', touchAction: 'none' }}
         />
         <div
           style={{

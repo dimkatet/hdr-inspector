@@ -14,6 +14,7 @@
 import type { RuntimeContext, RuntimeService } from '../core/RuntimeService';
 import type { Logger } from '../logger';
 import { silentLogger } from '../logger';
+import type { PostProcessingChain } from '../post-processing/PostProcessingChain';
 import type { ColorSpace, ImageData } from '../types';
 import { GPUContextManager } from './GPUContextManager';
 import type { Renderer, RenderOptions } from './Renderer';
@@ -26,11 +27,13 @@ import {
   getTransferFunctionIndex,
   getVisualizationModeIndex,
 } from './ShaderConstants';
+import { blitFragmentShaderWGSL, vertexShaderWGSL } from './shaders';
 import { TextureManager } from './TextureManager';
 
 export interface WebGPURendererOptions {
   transparent?: boolean;
   logger?: Logger;
+  postProcessingChain?: PostProcessingChain;
 }
 
 export class WebGPURenderer implements Renderer, RuntimeService {
@@ -43,10 +46,19 @@ export class WebGPURenderer implements Renderer, RuntimeService {
   private textureManager: TextureManager | null = null;
   private pipelineManager: RenderPipelineManager | null = null;
 
+  // Optional post-processing chain (lazy path)
+  private postProcessingChain: PostProcessingChain | null = null;
+
+  // Blit pipeline cache: canvasFormat → pipeline (for rgba16float → swapChain blit)
+  private blitPipelineCache = new Map<GPUTextureFormat, GPURenderPipeline>();
+  private blitBindGroupLayout: GPUBindGroupLayout | null = null;
+  private blitSampler: GPUSampler | null = null;
+
   constructor(canvas: HTMLCanvasElement, options: WebGPURendererOptions = {}) {
     this.canvas = canvas;
     this.transparent = options.transparent ?? false;
     this.logger = options.logger ?? silentLogger;
+    this.postProcessingChain = options.postProcessingChain ?? null;
 
     // Initialize context manager
     this.contextManager = new GPUContextManager(
@@ -124,7 +136,13 @@ export class WebGPURenderer implements Renderer, RuntimeService {
   }
 
   /**
-   * Render with current settings
+   * Render with current settings.
+   *
+   * Lazy post-processing path (when chain has passes):
+   *   main pass → chain.pingTexture → N user passes (ping-pong) → blit → swapChain
+   *
+   * Direct path (no passes, zero overhead):
+   *   main pass → swapChain
    */
   render(options: RenderOptions): void {
     if (!this.textureManager || !this.pipelineManager) {
@@ -164,47 +182,153 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       this.transparent ? 1.0 : 0.0,
       getTransferFunctionIndex(textureInfo.transferFunction),
       getObjectFitIndex(options.objectFit),
-      imageWidth / this.canvas.width, // pixelScaleX: fraction of canvas the image occupies at 1:1
-      imageHeight / this.canvas.height, // pixelScaleY: fraction of canvas the image occupies at 1:1
-      1.0,                              // outputTransferFunction: sRGB EOTF⁻¹ (display)
-      textureInfo.bitDepth,             // bitDepth for sub-16 normalization
-      0.0, 0.0, 0.0,                    // _pad1, _pad2, _pad3
+      imageWidth / this.canvas.width,
+      imageHeight / this.canvas.height,
+      1.0, // outputTransferFunction: sRGB EOTF⁻¹ (display)
+      textureInfo.bitDepth, // bitDepth for sub-16 normalization
+      0.0,
+      0.0,
+      0.0, // _pad1, _pad2, _pad3
     ]);
 
     const device = this.contextManager.getDevice();
     device.queue.writeBuffer(this.pipelineManager.getUniformBuffer(), 0, uniforms.buffer);
 
-    // Create command encoder
     const commandEncoder = device.createCommandEncoder();
-
-    // Get current texture view
     const context = this.contextManager.getContext();
-    const textureView = context.getCurrentTexture().createView();
 
-    // Create render pass
-    const renderPass = commandEncoder.beginRenderPass({
+    if (this.postProcessingChain?.hasPasses) {
+      // Lazy path: render to intermediate texture → chain passes → blit to swapChain
+      const inputTex = this.postProcessingChain.acquireInputTexture(
+        device,
+        this.canvas.width,
+        this.canvas.height
+      )!;
+
+      this.encodeImagePass(commandEncoder, inputTex.createView());
+
+      const finalTex = this.postProcessingChain.encodeCanvasPasses(commandEncoder);
+
+      this.encodeBlit(
+        commandEncoder,
+        finalTex.createView(),
+        context.getCurrentTexture().createView(),
+        this.contextManager.getCanvasFormat()
+      );
+    } else {
+      // Direct path: render straight to swapChain (no overhead)
+      this.encodeImagePass(commandEncoder, context.getCurrentTexture().createView());
+    }
+
+    device.queue.submit([commandEncoder.finish()]);
+  }
+
+  /**
+   * Encode the main image render pass into an arbitrary output view.
+   * Uses the current pipeline and bind group (set up in uploadImage / render).
+   */
+  private encodeImagePass(encoder: GPUCommandEncoder, outputView: GPUTextureView): void {
+    const renderPass = encoder.beginRenderPass({
       colorAttachments: [
         {
-          view: textureView,
+          view: outputView,
           loadOp: 'clear',
-          clearValue: {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: this.transparent ? 0.0 : 1.0,
-          },
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
           storeOp: 'store',
         },
       ],
     });
-
-    renderPass.setPipeline(this.pipelineManager.getPipeline());
-    renderPass.setBindGroup(0, this.pipelineManager.getBindGroup());
-    renderPass.draw(4); // Fullscreen quad (triangle strip)
+    renderPass.setPipeline(this.pipelineManager!.getPipeline());
+    renderPass.setBindGroup(0, this.pipelineManager!.getBindGroup());
+    renderPass.draw(4);
     renderPass.end();
+  }
 
-    // Submit commands
-    device.queue.submit([commandEncoder.finish()]);
+  /**
+   * Blit from an rgba16float source to a (potentially different format) destination.
+   * Used as the final step in the post-processing path.
+   * Cached by output format — created once per canvas format (typically 1-2 variants).
+   */
+  private encodeBlit(
+    encoder: GPUCommandEncoder,
+    inputView: GPUTextureView,
+    outputView: GPUTextureView,
+    outputFormat: GPUTextureFormat
+  ): void {
+    const device = this.contextManager.getDevice();
+    const pipeline = this.getOrCreateBlitPipeline(device, outputFormat);
+
+    const bindGroup = device.createBindGroup({
+      layout: this.blitBindGroupLayout!,
+      entries: [
+        { binding: 0, resource: inputView },
+        { binding: 1, resource: this.blitSampler! },
+      ],
+    });
+
+    const renderPass = encoder.beginRenderPass({
+      colorAttachments: [
+        {
+          view: outputView,
+          loadOp: 'clear',
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
+          storeOp: 'store',
+        },
+      ],
+    });
+    renderPass.setPipeline(pipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.draw(4);
+    renderPass.end();
+  }
+
+  /**
+   * Get or create a blit pipeline targeting the given output format.
+   * Blit bind group layout: binding 0 = texture (float), binding 1 = sampler (filtering).
+   */
+  private getOrCreateBlitPipeline(
+    device: GPUDevice,
+    outputFormat: GPUTextureFormat
+  ): GPURenderPipeline {
+    const cached = this.blitPipelineCache.get(outputFormat);
+    if (cached) return cached;
+
+    if (!this.blitBindGroupLayout) {
+      this.blitBindGroupLayout = device.createBindGroupLayout({
+        entries: [
+          { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+          { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        ],
+      });
+    }
+
+    if (!this.blitSampler) {
+      this.blitSampler = device.createSampler({
+        magFilter: 'linear',
+        minFilter: 'linear',
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      });
+    }
+
+    const shaderModule = device.createShaderModule({
+      code: `${vertexShaderWGSL}\n\n${blitFragmentShaderWGSL}`,
+    });
+
+    const pipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [this.blitBindGroupLayout] }),
+      vertex: { module: shaderModule, entryPoint: 'vs_main' },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'blit_main',
+        targets: [{ format: outputFormat }],
+      },
+      primitive: { topology: 'triangle-strip' },
+    });
+
+    this.blitPipelineCache.set(outputFormat, pipeline);
+    this.logger.log('[WebGPURenderer] Blit pipeline created for format:', outputFormat);
+    return pipeline;
   }
 
   /**
@@ -253,11 +377,15 @@ export class WebGPURenderer implements Renderer, RuntimeService {
     const bytesPerRow = Math.ceil((imageWidth * bytesPerPixel) / 256) * 256;
     const bufferSize = bytesPerRow * imageHeight;
 
-    // Create offscreen rgba16float render target
+    // Create offscreen rgba16float render target.
+    // TEXTURE_BINDING added so the chain can read it as input when post-processing is active.
     const renderTexture = device.createTexture({
       size: { width: imageWidth, height: imageHeight },
       format: exportFormat,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT |
+        GPUTextureUsage.COPY_SRC |
+        GPUTextureUsage.TEXTURE_BINDING,
     });
 
     const stagingBuffer = device.createBuffer({
@@ -282,6 +410,8 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       ],
     });
 
+    let ppTempTextures: GPUTexture[] = [];
+
     try {
       const imageAspect = imageWidth / imageHeight;
 
@@ -304,30 +434,48 @@ export class WebGPURenderer implements Renderer, RuntimeService {
         getObjectFitIndex(options.objectFit),
         1.0, // pixelScaleX: 1:1 pixel mapping
         1.0, // pixelScaleY: 1:1 pixel mapping
-        outputTFIndex,        // outputTransferFunction
+        outputTFIndex, // outputTransferFunction
         textureInfo.bitDepth, // bitDepth for sub-16 normalization
-        0.0, 0.0, 0.0,        // _pad1, _pad2, _pad3
+        0.0,
+        0.0,
+        0.0, // _pad1, _pad2, _pad3
       ]);
       device.queue.writeBuffer(tempUniformBuffer, 0, uniforms.buffer);
 
       const commandEncoder = device.createCommandEncoder();
 
+      // Main export render pass → renderTexture
       const renderPass = commandEncoder.beginRenderPass({
-        colorAttachments: [{
-          view: renderTexture.createView(),
-          loadOp: 'clear',
-          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
-          storeOp: 'store',
-        }],
+        colorAttachments: [
+          {
+            view: renderTexture.createView(),
+            loadOp: 'clear',
+            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: this.transparent ? 0.0 : 1.0 },
+            storeOp: 'store',
+          },
+        ],
       });
-
       renderPass.setPipeline(exportPipeline);
       renderPass.setBindGroup(0, tempBindGroup);
       renderPass.draw(4);
       renderPass.end();
 
+      // Apply post-processing passes if active (renderTexture → chain temp textures → finalTexture)
+      let finalTexture = renderTexture;
+      if (this.postProcessingChain?.hasPasses) {
+        const result = this.postProcessingChain.prepareOffscreenPasses(
+          device,
+          commandEncoder,
+          renderTexture,
+          imageWidth,
+          imageHeight
+        );
+        finalTexture = result.finalTexture;
+        ppTempTextures = result.tempTextures;
+      }
+
       commandEncoder.copyTextureToBuffer(
-        { texture: renderTexture },
+        { texture: finalTexture },
         { buffer: stagingBuffer, bytesPerRow },
         { width: imageWidth, height: imageHeight }
       );
@@ -355,7 +503,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       if (textureInfo.transferFunction === 'linear') {
         pixels = readbackPixels;
       } else {
-        const maxVal = (2 ** textureInfo.bitDepth) - 1;
+        const maxVal = 2 ** textureInfo.bitDepth - 1;
         const uint16 = new Uint16Array(readbackPixels.length);
         for (let i = 0; i < readbackPixels.length; i++) {
           uint16[i] = Math.round(Math.min(Math.max(readbackPixels[i], 0), 1) * maxVal);
@@ -375,6 +523,7 @@ export class WebGPURenderer implements Renderer, RuntimeService {
       tempUniformBuffer.destroy();
       renderTexture.destroy();
       stagingBuffer.destroy();
+      for (const tex of ppTempTextures) tex.destroy();
     }
   }
 
@@ -391,5 +540,8 @@ export class WebGPURenderer implements Renderer, RuntimeService {
     if (this.pipelineManager) {
       this.pipelineManager.destroy();
     }
+    this.blitPipelineCache.clear();
+    this.blitBindGroupLayout = null;
+    this.blitSampler = null;
   }
 }

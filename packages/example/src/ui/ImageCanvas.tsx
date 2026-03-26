@@ -7,7 +7,8 @@
 import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
 import { type ExportActions, HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { VignettePlugin } from '../plugins/vignettePlugin';
 
 interface ImageCanvasProps {
   loader?: ImageLoader;
@@ -160,6 +161,11 @@ export function ImageCanvas({
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const hdrRef = useRef<HDRImageHandle>(null);
 
+  // Vignette plugin — stable instance across renders
+  const vignettePlugin = useMemo(() => new VignettePlugin(false), []);
+  const [vignetteEnabled, setVignetteEnabled] = useState(false);
+  const pluginRegisteredRef = useRef(false);
+
   const handleError = useCallback((err: Error) => {
     console.log(err);
     setError(err.message);
@@ -167,11 +173,24 @@ export function ImageCanvas({
 
   const handleLoad = useCallback(() => {
     setError(null);
-    const effectiveState = hdrRef.current?.getCanvas()?.render.getState();
+    const canvas = hdrRef.current?.getCanvas();
+    // Register plugin once on first load (canvas instance is stable)
+    if (canvas && !pluginRegisteredRef.current) {
+      canvas.use(vignettePlugin);
+      pluginRegisteredRef.current = true;
+    }
+    const effectiveState = canvas?.render.getState();
     if (effectiveState) {
       onRenderStateSync?.(effectiveState);
     }
-  }, [onRenderStateSync]);
+  }, [onRenderStateSync, vignettePlugin]);
+
+  const handleVignetteToggle = useCallback(() => {
+    setVignetteEnabled((prev) => {
+      vignettePlugin.setEnabled(!prev);
+      return !prev;
+    });
+  }, [vignettePlugin]);
 
   const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
 
@@ -236,7 +255,7 @@ export function ImageCanvas({
         options={{
           ...options,
           transparent: true,
-          // debug: true,
+          debug: true,
         }}
         onLoad={handleLoad}
         onError={handleError}
@@ -301,6 +320,22 @@ export function ImageCanvas({
         </button>
         <button type="button" style={btnStyle} onClick={() => hdrRef.current?.resetViewport()}>
           Reset
+        </button>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 24, backgroundColor: '#444' }} />
+
+        {/* Vignette post-processing toggle */}
+        <button
+          type="button"
+          onClick={handleVignetteToggle}
+          style={{
+            ...btnStyle,
+            backgroundColor: vignetteEnabled ? '#2563eb' : '#333',
+            borderColor: vignetteEnabled ? '#3b82f6' : '#555',
+          }}
+        >
+          Vignette
         </button>
       </div>
     </div>

@@ -63,7 +63,9 @@ export class ExportManager implements ExportAPI {
     // Create ImageData and draw to canvas
     // Note: Create fresh Uint8ClampedArray to ensure proper ArrayBuffer type
     const imageData = new ImageData(new Uint8ClampedArray(pixelsU8), data.width, data.height);
-    ctx.putImageData(imageData, 0, 0);
+    if (ctx instanceof OffscreenCanvasRenderingContext2D) {
+      ctx.putImageData(imageData, 0, 0);
+    } 
 
     // Export to blob
     const type = options?.type ?? 'image/png';

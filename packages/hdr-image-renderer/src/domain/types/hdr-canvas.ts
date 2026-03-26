@@ -6,6 +6,7 @@
  */
 
 import type { HDRCanvasEventMap } from '../../core/EventTypes';
+import type { HDRPlugin } from '../../core/Plugin';
 import type { EventBusOptions } from '../../core/TypedEventBus';
 import type { CanvasAPI } from './canvas';
 import type { ExportAPI } from './export';
@@ -40,6 +41,8 @@ export interface IHDRCanvas {
     callback: (data: HDRCanvasEventMap[K]) => void,
     options?: EventBusOptions
   ): () => void;
+  /** Register a plugin (chainable, hot-add supported after initialize()) */
+  use(plugin: HDRPlugin): this;
   /** Cleanup all resources */
   destroy(): void;
 }

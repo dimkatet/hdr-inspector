@@ -99,7 +99,11 @@ export function createOriginalFormatEncoder(
       readback.pixels.slice(0, 16)
     );
     const autoImageData = readbackToAutoImageData(readback, format, descriptor);
-    const encoded = await encode(autoImageData, { format, avif: { quality: 99 }, jxl: { quality: 99 } });
+    const encoded = await encode(autoImageData, {
+      format,
+      avif: { quality: 99 },
+      jxl: { quality: 99 },
+    });
     return new Blob([new Uint8Array(encoded).buffer], { type: mimeType });
   };
 }

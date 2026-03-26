@@ -23,6 +23,7 @@ import { ExportManager } from '../export';
 import { ImageLoadingManager } from '../ImageLoadingManager';
 import { InteractionManager } from '../interaction';
 import { createLogger, type Logger } from '../logger';
+import { PostProcessingChain } from '../post-processing/PostProcessingChain';
 import { CanvasResizer, RenderSettings, WebGPURenderer } from '../render';
 import { setGPUDeviceLogger } from '../render/gpu-device';
 import { deriveImageDefaults } from '../render/imageDefaults';
@@ -232,6 +233,13 @@ export class CanvasRuntime {
    * Pure service registration — no side-effects or event wiring here.
    */
   private registerServices(config: CoreConfig): void {
+    // Post-processing chain (managed) — registered first so renderer can reference it
+    this.registry.registerManaged('postProcessing', () => {
+      const chain = new PostProcessingChain(this.logger);
+      this.registry.trackManagedInstance('postProcessing', chain);
+      return chain;
+    });
+
     // Renderer (managed) — use custom backend if provided, otherwise default to WebGPU
     this.registry.registerManaged('renderer', () => {
       const renderer =
@@ -241,6 +249,7 @@ export class CanvasRuntime {
           return new WebGPURenderer(this.canvas, {
             transparent: config.transparent,
             logger: this.logger,
+            postProcessingChain: this.registry.get('postProcessing') as PostProcessingChain,
           });
         })();
       this.registry.trackManagedInstance('renderer', renderer);
@@ -337,6 +346,7 @@ export class CanvasRuntime {
 
     // Re-render triggers
     eventBus.on('render:settingsChanged', () => this.requestRender());
+    eventBus.on('postProcessing:changed', () => this.requestRender());
     eventBus.on('viewport:update', () => this.requestRender());
     eventBus.on('canvas:resized', () => this.requestRender());
     eventBus.on('loading:stateChange', ({ state }) => {
