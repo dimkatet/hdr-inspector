@@ -4,8 +4,12 @@
  * Demonstrates usage of @dimkatet/hdr-canvas package
  */
 
-import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
-import { detectHDRCapabilities } from '@dimkatet/hdr-canvas';
+import {
+  detectHDRCapabilities,
+  type ImageEncoder,
+  type ImageLoader,
+  type RenderState,
+} from '@dimkatet/hdr-canvas';
 import {
   type AutoWorkerClient,
   CodecLoadError,
@@ -15,8 +19,9 @@ import {
   type ImageDescriptor,
   type ImageFormat,
 } from '@dimkatet/jcodecs-auto';
-// import { decodeAuto, detectFormat, DecodeError } from '../decoders';
+import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EFFECT_PRESETS, type EffectPresetName, EffectsPlugin } from '../plugins/effectsPlugin';
 import {
   createOriginalFormatEncoder,
   ENCODABLE_FORMATS,
@@ -25,10 +30,54 @@ import {
 } from '../utils/exportEncoder';
 import { syntheticImages } from '../utils/syntheticImages';
 import { Controls } from './Controls';
+import { EffectParamsPanel } from './EffectParamsPanel';
 import { FileDrop } from './FileDrop';
 import { Gallery, type GalleryImage } from './Gallery';
 import { HDRInfo } from './HDRInfo';
 import { ImageCanvas } from './ImageCanvas';
+
+// ---------------------------------------------------------------------------
+// CollapsibleSection — reusable collapsible panel header
+// ---------------------------------------------------------------------------
+
+function CollapsibleSection({
+  title,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div style={{ borderBottom: '1px solid #222' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '10px 16px',
+          background: 'none',
+          border: 'none',
+          color: '#ccc',
+          cursor: 'pointer',
+          fontSize: '13px',
+          fontWeight: 600,
+          textAlign: 'left',
+          letterSpacing: '0.02em',
+        }}
+      >
+        <span>{title}</span>
+        <span style={{ fontSize: 10, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div>{children}</div>}
+    </div>
+  );
+}
 
 function App() {
   const [decodeClient, setDecodeClient] = useState<AutoWorkerClient | null>(null);
@@ -38,6 +87,28 @@ function App() {
   const [filename, setFilename] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hdrAvailable, setHdrAvailable] = useState(false);
+
+  // Effects plugin — stable instance, owns all presets
+  const effectsPlugin = useMemo(() => new EffectsPlugin(), []);
+  const [activeEffect, setActiveEffect] = useState<EffectPresetName | null>(null);
+  const [effectParamInfo, setEffectParamInfo] = useState(() => effectsPlugin.getParamInfo());
+
+  const handleEffectSelect = useCallback(
+    (name: EffectPresetName | null) => {
+      effectsPlugin.setPreset(name);
+      setActiveEffect(name);
+      setEffectParamInfo(effectsPlugin.getParamInfo());
+    },
+    [effectsPlugin]
+  );
+
+  const handleEffectParamUpdate = useCallback(
+    (stepId: string, name: string, value: unknown) => {
+      effectsPlugin.updateParam(stepId, name, value);
+      setEffectParamInfo(effectsPlugin.getParamInfo());
+    },
+    [effectsPlugin]
+  );
 
   // Single render state: starts empty (all undefined → library auto-detects),
   // populated by onRenderStateSync after image load, updated on user changes.
@@ -407,6 +478,9 @@ function App() {
                 encoder={encoder}
                 originalFormatLabel={originalFormatLabel}
                 originalFormatExtension={originalFormatExtension}
+                effectsPlugin={effectsPlugin}
+                activeEffect={activeEffect}
+                onEffectSelect={handleEffectSelect}
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
                 <button
@@ -447,16 +521,33 @@ function App() {
               </div>
             </div>
 
-            {/* Controls — only shown after onRenderStateSync has populated the state */}
-            {
-              <div>
+            {/* Right panel — collapsible sections */}
+            <div
+              style={{
+                backgroundColor: '#1a1a1a',
+                border: '1px solid #2a2a2a',
+                borderRadius: 6,
+                overflow: 'hidden',
+                alignSelf: 'start',
+              }}
+            >
+              <CollapsibleSection title="Image Options">
                 <Controls
                   displayState={renderOptions}
                   onUserOptionsChange={handleUserOptionsChange}
                   hdrAvailable={hdrAvailable}
                 />
-              </div>
-            }
+              </CollapsibleSection>
+
+              {activeEffect && (
+                <CollapsibleSection title={EFFECT_PRESETS[activeEffect].label}>
+                  <EffectParamsPanel
+                    paramInfo={effectParamInfo}
+                    onUpdate={handleEffectParamUpdate}
+                  />
+                </CollapsibleSection>
+              )}
+            </div>
           </div>
         )}
 

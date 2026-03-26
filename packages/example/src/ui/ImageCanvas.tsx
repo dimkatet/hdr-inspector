@@ -7,10 +7,12 @@
 import type { ImageEncoder, ImageLoader, RenderState } from '@dimkatet/hdr-canvas';
 import { type ExportActions, HDRImage, type HDRImageHandle } from '@dimkatet/hdr-canvas/react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GlitchPlugin } from '../plugins/glitchPlugin';
-import { VignettePlugin } from '../plugins/vignettePlugin';
-import { EffectParamsPanel } from './EffectParamsPanel';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  EFFECT_PRESETS,
+  type EffectPresetName,
+  type EffectsPlugin,
+} from '../plugins/effectsPlugin';
 
 interface ImageCanvasProps {
   loader?: ImageLoader;
@@ -22,6 +24,10 @@ interface ImageCanvasProps {
   originalFormatLabel?: string;
   /** File extension for the original format (e.g. 'jxl') */
   originalFormatExtension?: string;
+  /** Unified effects plugin — owned by App, registered once on first load */
+  effectsPlugin: EffectsPlugin;
+  activeEffect: EffectPresetName | null;
+  onEffectSelect: (name: EffectPresetName | null) => void;
 }
 
 interface ExportMenuProps {
@@ -157,21 +163,14 @@ export function ImageCanvas({
   encoder,
   originalFormatLabel,
   originalFormatExtension,
+  effectsPlugin,
+  activeEffect,
+  onEffectSelect,
 }: ImageCanvasProps) {
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
   const hdrRef = useRef<HDRImageHandle>(null);
-
-  // Vignette plugin — stable instance across renders
-  const vignettePlugin = useMemo(() => new VignettePlugin(false), []);
-  const [vignetteEnabled, setVignetteEnabled] = useState(false);
-
-  // Glitch plugin — stable instance across renders
-  const glitchPlugin = useMemo(() => new GlitchPlugin(false), []);
-  const [glitchEnabled, setGlitchEnabled] = useState(false);
-  const [glitchParamInfo, setGlitchParamInfo] = useState(() => glitchPlugin.getParamInfo());
-
   const pluginRegisteredRef = useRef(false);
 
   const handleError = useCallback((err: Error) => {
@@ -182,38 +181,21 @@ export function ImageCanvas({
   const handleLoad = useCallback(() => {
     setError(null);
     const canvas = hdrRef.current?.getCanvas();
-    // Register plugin once on first load (canvas instance is stable)
     if (canvas && !pluginRegisteredRef.current) {
-      canvas.use(vignettePlugin);
-      canvas.use(glitchPlugin);
+      canvas.use(effectsPlugin);
       pluginRegisteredRef.current = true;
     }
     const effectiveState = canvas?.render.getState();
     if (effectiveState) {
       onRenderStateSync?.(effectiveState);
     }
-  }, [onRenderStateSync, vignettePlugin, glitchPlugin]);
+  }, [onRenderStateSync, effectsPlugin]);
 
-  const handleVignetteToggle = useCallback(() => {
-    setVignetteEnabled((prev) => {
-      vignettePlugin.setEnabled(!prev);
-      return !prev;
-    });
-  }, [vignettePlugin]);
-
-  const handleGlitchToggle = useCallback(() => {
-    setGlitchEnabled((prev) => {
-      glitchPlugin.setEnabled(!prev);
-      return !prev;
-    });
-  }, [glitchPlugin]);
-
-  const handleGlitchParamUpdate = useCallback(
-    (stepId: string, name: string, value: unknown) => {
-      glitchPlugin.updateParam(stepId, name, value);
-      setGlitchParamInfo(glitchPlugin.getParamInfo());
+  const handleEffectSelect = useCallback(
+    (name: EffectPresetName) => {
+      onEffectSelect(activeEffect === name ? null : name);
     },
-    [glitchPlugin],
+    [activeEffect, onEffectSelect]
   );
 
   const handleZoom = useCallback((zoomLevel: number) => setZoom(zoomLevel), []);
@@ -279,7 +261,7 @@ export function ImageCanvas({
         options={{
           ...options,
           transparent: true,
-          debug: true,
+          // debug: true,
         }}
         onLoad={handleLoad}
         onError={handleError}
@@ -349,36 +331,25 @@ export function ImageCanvas({
         {/* Divider */}
         <div style={{ width: 1, height: 24, backgroundColor: '#444' }} />
 
-        {/* Vignette post-processing toggle */}
-        <button
-          type="button"
-          onClick={handleVignetteToggle}
-          style={{
-            ...btnStyle,
-            backgroundColor: vignetteEnabled ? '#2563eb' : '#333',
-            borderColor: vignetteEnabled ? '#3b82f6' : '#555',
-          }}
-        >
-          Vignette
-        </button>
-
-        {/* Glitch post-processing toggle */}
-        <button
-          type="button"
-          onClick={handleGlitchToggle}
-          style={{
-            ...btnStyle,
-            backgroundColor: glitchEnabled ? '#7c3aed' : '#333',
-            borderColor: glitchEnabled ? '#8b5cf6' : '#555',
-          }}
-        >
-          Glitch
-        </button>
+        {/* Effect preset selector — one active at a time, click active to deactivate */}
+        {(Object.keys(EFFECT_PRESETS) as EffectPresetName[]).map((name) => {
+          const active = activeEffect === name;
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => handleEffectSelect(name)}
+              style={{
+                ...btnStyle,
+                backgroundColor: active ? '#7c3aed' : '#333',
+                borderColor: active ? '#8b5cf6' : '#555',
+              }}
+            >
+              {EFFECT_PRESETS[name].label}
+            </button>
+          );
+        })}
       </div>
-
-      {glitchEnabled && (
-        <EffectParamsPanel paramInfo={glitchParamInfo} onUpdate={handleGlitchParamUpdate} />
-      )}
     </div>
   );
 }

@@ -11,9 +11,10 @@ const NODE_TYPE_LABELS: Record<string, string> = {
 interface EffectParamsPanelProps {
   paramInfo: readonly StepParamInfo[]
   onUpdate: (stepId: string, name: string, value: unknown) => void
+  title?: string
 }
 
-export function EffectParamsPanel({ paramInfo, onUpdate }: EffectParamsPanelProps) {
+export function EffectParamsPanel({ paramInfo, onUpdate, title = 'Effect Parameters' }: EffectParamsPanelProps) {
   // Build labels for duplicate node types: "Noise 1", "Noise 2"
   const typeCounters = new Map<string, number>()
   const typeTotals = new Map<string, number>()
@@ -34,7 +35,7 @@ export function EffectParamsPanel({ paramInfo, onUpdate }: EffectParamsPanelProp
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-        Glitch Parameters
+        {title}
       </div>
 
       {paramInfo.map(({ stepId, nodeType, label, schema, values }) => {
@@ -110,7 +111,7 @@ function ParamControl({ stepId, name, desc, value, onUpdate }: ParamControlProps
     case 'boolean': {
       const bool = typeof value === 'boolean' ? value : desc.default
       return (
-        <div style={{ ...rowStyle, cursor: 'pointer' }} onClick={() => onUpdate(stepId, name, !bool)}>
+        <label style={{ ...rowStyle, cursor: 'pointer' }}>
           <span style={labelStyle}>{desc.label}</span>
           <input
             type="checkbox"
@@ -118,7 +119,7 @@ function ParamControl({ stepId, name, desc, value, onUpdate }: ParamControlProps
             style={{ accentColor: '#8b5cf6', cursor: 'pointer', width: 14, height: 14 }}
             onChange={(e) => onUpdate(stepId, name, e.target.checked)}
           />
-        </div>
+        </label>
       )
     }
     case 'vec2': {
