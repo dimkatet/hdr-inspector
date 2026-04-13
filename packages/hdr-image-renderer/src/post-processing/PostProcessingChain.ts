@@ -37,7 +37,7 @@ export interface PostProcessingAPI {
   requestRender(): void;
 }
 
-const INTERMEDIATE_FORMAT: GPUTextureFormat = 'rgba16float';
+const INTERMEDIATE_FORMAT: GPUTextureFormat = 'bgra8unorm';
 
 export class PostProcessingChain implements PostProcessingAPI, RuntimeService {
   private passes: PostProcessingPass[] = [];

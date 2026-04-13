@@ -22,7 +22,10 @@
     "build": "tsup",
     "watch": "tsup --watch",
     "clean": "rm -rf dist .turbo",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:pixels": "vitest run --config vitest.browser.config.ts"
   },
   "keywords": [
     "effects",
@@ -42,8 +45,11 @@
     "access": "public"
   },
   "devDependencies": {
+    "@vitest/browser": "^3.2.4",
     "@webgpu/types": "^0.1.68",
+    "playwright": "^1.49.0",
     "tsup": "^8.3.5",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
   }
 }

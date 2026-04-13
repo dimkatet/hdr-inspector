@@ -96,7 +96,7 @@ export class CompiledGraphPass implements MinimalPass {
     // 1×1 black default texture — used as fallback for unconnected optional ports
     this.defaultTexture = device.createTexture({
       size: { width: 1, height: 1 },
-      format: 'rgba16float',
+      format: 'bgra8unorm', // return to 'rgba16float' for HDR --- IGNORE ---
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       label: 'effects-default-black',
     });
@@ -262,7 +262,7 @@ export class CompiledGraphPass implements MinimalPass {
     if (!this.stepTextures.has(stepId)) {
       const tex = device.createTexture({
         size: { width, height },
-        format: 'rgba16float',
+        format: 'bgra8unorm', // return to 'rgba16float' for HDR --- IGNORE ---
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         label: `effects-step-${stepId}`,
       });

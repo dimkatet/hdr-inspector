@@ -68,9 +68,11 @@ fn perlin(p: vec2f) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-  // Convert canvas UV → image UV so noise tracks the image on zoom/pan
-  // Inverse of: canvasUV = (imageUV - 0.5) * zoom - pan + 0.5
-  let imageUV = (in.uv - 0.5) / params.zoom + vec2f(params.panX, params.panY) + 0.5;
+  // Convert canvas UV → image UV so noise tracks the image on zoom/pan.
+  // Forward: canvasUV = (imageUV - 0.5) * zoom - pan + 0.5
+  // Inverse: imageUV = (canvasUV - 0.5 + pan) / zoom + 0.5
+  // pan must be divided by zoom; putting it outside the division is wrong at zoom≠1.
+  let imageUV = (in.uv - 0.5 + vec2f(params.panX, params.panY)) / params.zoom + 0.5;
 
   // 'line' mode: use only Y coordinate so every pixel on the same scanline
   // gets the same noise value — produces horizontal bands (VHS/tape look).
@@ -263,8 +265,8 @@ fn perlin_fbm(p: vec2f) -> f32 {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-  // Same image-space conversion as noise.2d
-  let imageUV = (in.uv - 0.5) / params.zoom + vec2f(params.panX, params.panY) + 0.5;
+  // Same image-space conversion as noise.2d — pan must be inside the division by zoom.
+  let imageUV = (in.uv - 0.5 + vec2f(params.panX, params.panY)) / params.zoom + 0.5;
   let seedOff = vec2f(params.seed * 1.7321, params.seed * 3.1415);
 
   var p = imageUV * params.frequency + seedOff;
@@ -310,11 +312,13 @@ fn rotateHue(rgb: vec3f, angle: f32) -> vec3f {
   let sinA = sin(angle);
   let k = (1.0 - cosA) / 3.0;
   let s = sinA * 0.57735026919; // 1/sqrt(3)
-  // Column-major mat3x3 (columns = transposed rows of the rotation matrix)
+  // WGSL mat3x3f takes columns. These ARE the columns of the Rodrigues rotation
+  // matrix around axis (1,1,1)/sqrt(3). Passing them as columns is correct —
+  // m*v expands as col0*v.x + col1*v.y + col2*v.z which implements M_math * v.
   let m = mat3x3f(
-    vec3f(cosA + k,  k + s,  k - s),
-    vec3f(k - s,  cosA + k,  k + s),
-    vec3f(k + s,  k - s,  cosA + k),
+    vec3f(cosA + k,  k + s,  k - s),   // column 0
+    vec3f(k - s,  cosA + k,  k + s),   // column 1
+    vec3f(k + s,  k - s,  cosA + k),   // column 2
   );
   return m * rgb;
 }
@@ -372,7 +376,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     case 1u: { result = a - b; }
     case 2u: { result = a * b; }
     case 3u: { result = step(a, b); }    // step(edge=a, x=b): 0 if b<a, 1 otherwise
-    case 4u: { result = clamp(a, params.clampMin, params.clampMax); }
+    case 4u: {
+      // clamp uses only texA; texB is bound but its value is not read here.
+      result = clamp(a, params.clampMin, params.clampMax);
+    }
     default: { result = a; }
   }
   return vec4f(result, result, result, 1.0);
@@ -420,7 +427,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     return vec4f(params.stops[0].color, sample.a);
   }
 
-  // Find surrounding stops and interpolate
+  // Clamp to first stop when luma is below the gradient range
+  if (luma <= params.stops[0].pos) {
+    return vec4f(params.stops[0].color, sample.a);
+  }
+  // Clamp to last stop when luma is above the gradient range
+  if (luma >= params.stops[params.numStops - 1u].pos) {
+    return vec4f(params.stops[params.numStops - 1u].color, sample.a);
+  }
+
+  // Interpolate between the two surrounding stops
   var outColor = params.stops[0].color;
   for (var i = 1u; i < params.numStops; i++) {
     let prev = params.stops[i - 1u];
@@ -431,7 +447,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
       outColor = mix(prev.color, curr.color, t);
       break;
     }
-    outColor = curr.color;
   }
 
   return vec4f(outColor, sample.a);
@@ -461,7 +476,10 @@ struct VignetteParams {
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let color = textureSample(imageTex, samp, in.uv);
   let dist = distance(in.uv, vec2f(0.5));
-  let mask = smoothstep(params.innerRadius, params.outerRadius, dist);
+  // smoothstep(low, high, x) is undefined when low >= high (WGSL spec).
+  // Guard against degenerate range when innerRadius >= outerRadius.
+  let safeOuter = max(params.outerRadius, params.innerRadius + 0.001);
+  let mask = smoothstep(params.innerRadius, safeOuter, dist);
   let factor = 1.0 - mask * params.strength;
   return vec4f(color.rgb * factor, color.a);
 }
@@ -500,28 +518,33 @@ fn overlay_channel(base: f32, blend: f32) -> f32 {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   let img = textureSample(imageTex, samp, in.uv);
-  let f = textureSample(fieldTex, samp, in.uv).r * params.intensity;
+  // Sample the raw field value without pre-multiplying by intensity.
+  // Each blend mode uses intensity differently; applying it here would double-apply
+  // in modes that already use intensity as a mix weight (e.g. multiply, screen, overlay).
+  let field = textureSample(fieldTex, samp, in.uv).r;
   var rgb = img.rgb;
   switch (params.mode) {
-    case 0u: { // add
-      rgb = rgb + vec3f(f);
+    case 0u: { // add: a + b * intensity
+      rgb = img.rgb + vec3f(field * params.intensity);
     }
-    case 1u: { // multiply
-      rgb = rgb * mix(vec3f(1.0), vec3f(f), params.intensity);
+    case 1u: { // multiply: a * mix(1, b, intensity)
+      rgb = img.rgb * mix(vec3f(1.0), vec3f(field), params.intensity);
     }
-    case 2u: { // screen (operates in [0,1])
+    case 2u: { // screen: 1 - (1-a)(1-b), blended by intensity
       let b = clamp(img.rgb, vec3f(0.0), vec3f(1.0));
-      rgb = vec3f(1.0) - (vec3f(1.0) - b) * vec3f(1.0 - f);
+      let screened = vec3f(1.0) - (vec3f(1.0) - b) * vec3f(1.0 - field);
+      rgb = mix(img.rgb, screened, params.intensity);
     }
-    case 3u: { // overlay
+    case 3u: { // overlay: blended by intensity
       let b = clamp(img.rgb, vec3f(0.0), vec3f(1.0));
-      rgb = vec3f(
-        overlay_channel(b.r, f),
-        overlay_channel(b.g, f),
-        overlay_channel(b.b, f),
+      let overlaid = vec3f(
+        overlay_channel(b.r, field),
+        overlay_channel(b.g, field),
+        overlay_channel(b.b, field),
       );
+      rgb = mix(img.rgb, overlaid, params.intensity);
     }
-    default: { rgb = rgb; }
+    default: { rgb = img.rgb; }
   }
   return vec4f(rgb, img.a);
 }
@@ -617,7 +640,7 @@ fn fbm_vec2(p: vec2f, octaves: i32, persistence: f32) -> vec2f {
     dy += perlin_dw(pp + seedOff2) * amp;
     totalAmp += amp;
     amp *= persistence;
-    pp *= 2.0;
+    pp *= 2.0; // lacunarity is fixed at 2.0 for geometry.domainWarp (unlike noise.fbm where it is a parameter)
   }
   return vec2f(dx, dy) / totalAmp; // normalised to [-1, 1]
 }

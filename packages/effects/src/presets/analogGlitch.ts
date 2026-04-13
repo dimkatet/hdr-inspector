@@ -41,7 +41,7 @@ const DEFAULTS: AnalogGlitchOptions = {
  * noise1  = Noise(freq=high)
  * noise2  = Noise(freq=low)
  * warp    = Warp(source, noise1, subtleStrength)
- * mask    = Mask(warp, noise2, threshold)
+ * mask    = LumaMask(noise2, threshold)
  * shifted = Warp(warp, noise2, largeStrength)
  * rgb     = ChannelOffset(shifted, offsets)
  * output  = Mix(warp, rgb, mask)
@@ -49,8 +49,8 @@ const DEFAULTS: AnalogGlitchOptions = {
  *
  * The graph is valid and ready to be passed directly to `compile()`.
  *
- * Note: `mask` (outputType: rgba) feeds the `factor` port of `utility.mix`.
- * The Phase 2 WebGPU adapter will sample the r-channel as the blend factor.
+ * Note: `mask` (outputType: scalar) feeds the `factor` port of `utility.mix`.
+ * The mask is purely procedural — derived only from noise2, independent of image content.
  */
 export function createAnalogGlitch(options: Partial<AnalogGlitchOptions> = {}): EffectGraph {
   const opts: AnalogGlitchOptions = { ...DEFAULTS, ...options };
@@ -87,15 +87,15 @@ export function createAnalogGlitch(options: Partial<AnalogGlitchOptions> = {}): 
   g.connect(source, warp, 'image');
   g.connect(noise1, warp, 'field');
 
-  // Mask: pixels where noise2 exceeds threshold
+  // Procedural mask: smoothstep on noise2 alone — pixels where noise2 exceeds threshold
+  // get factor→1 (glitched), below threshold get factor≈0 (clean). No image dependency.
   const mask: NodeId = g.addNode({
-    type: 'utility.mask',
-    outputType: 'rgba',
-    inputPorts: ['image', 'mask'] as const,
-    params: { threshold: opts.threshold, invert: false },
+    type: 'utility.lumaMask',
+    outputType: 'scalar',
+    inputPorts: ['image'] as const,
+    params: { low: opts.threshold, high: 1.0 },
   });
-  g.connect(warp, mask, 'image');
-  g.connect(noise2, mask, 'mask');
+  g.connect(noise2, mask, 'image');
 
   // Large shift of warp driven by low-frequency noise
   const shifted: NodeId = g.addNode({

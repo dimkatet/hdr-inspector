@@ -52,7 +52,7 @@ const DEFAULTS: AnalogVHSOptions = {
  *
  * ```
  * noiseHi → warpScanline(source)
- * noiseLo → mask(threshold) ─────────────────────────────► mix(scanline, torn, mask)
+ * noiseLo → lumaMask(tearThreshold) ──────────────────────► mix(scanline, torn, lumaMask)
  *         → warpTear(scanline)                                └─► channelOffset
  *                                                                  └─► blend(noiseGrain, add)
  *                                                                       └─► colorTransform → output
@@ -94,14 +94,16 @@ export function createAnalogVHS(options: Partial<AnalogVHSOptions> = {}): Effect
     params: { frequency: opts.tearFreq, seed: opts.seed2, noiseType: 'perlin', sampleDomain: 'line' },
   });
 
+  // Pure procedural mask: smoothstep on noise alone — no image content dependency.
+  // low=tearThreshold means rows where noiseLo < tearThreshold get factor≈0 (no tear);
+  // rows where noiseLo approaches 1.0 get factor→1 (full tear).
   const tearMask: NodeId = g.addNode({
-    type: 'utility.mask',
-    outputType: 'rgba',
-    inputPorts: ['image', 'mask'] as const,
-    params: { threshold: opts.tearThreshold, invert: false },
+    type: 'utility.lumaMask',
+    outputType: 'scalar',
+    inputPorts: ['image'] as const,
+    params: { low: opts.tearThreshold, high: 1.0 },
   });
-  g.connect(warpScanline, tearMask, 'image');
-  g.connect(noiseLo, tearMask, 'mask');
+  g.connect(noiseLo, tearMask, 'image');
 
   const warpTear: NodeId = g.addNode({
     type: 'geometry.warp',

@@ -2,7 +2,12 @@ import { EffectGraph } from '../graph/Graph';
 import type { NodeId } from '../types';
 
 export interface DataGlitchOptions {
-  /** Mosaic block size (number of blocks across each axis) */
+  /**
+   * Mosaic block size (number of blocks across each axis).
+   * Should match geometry.blockWarp's internal hardcoded gridSize (12) so
+   * displaced cells shift whole mosaic blocks without cutting across
+   * pixelation boundaries.
+   */
   readonly blockSize: number;
   /** Per-block random displacement */
   readonly blockWarpStrengthX: number;
@@ -11,10 +16,13 @@ export interface DataGlitchOptions {
   /** Chromatic aberration */
   readonly rOffset: readonly [number, number];
   readonly bOffset: readonly [number, number];
-  /** High-frequency noise used as spatial blend mask */
+  /** Noise used as spatial mask — controls where corruption clusters appear */
   readonly noiseFreq: number;
   readonly noiseSeed: number;
-  /** Luma mask applied to noise — controls mask density */
+  /**
+   * Luma mask smoothstep range — keep narrow (≤ 0.15) for hard-edged clusters
+   * so block boundaries stay crisp at the mask edge.
+   */
   readonly maskLow: number;
   readonly maskHigh: number;
   /** Color grade on the glitched layer */
@@ -26,35 +34,42 @@ export interface DataGlitchOptions {
 }
 
 const DEFAULTS: DataGlitchOptions = {
-  blockSize: 16,
+  blockSize: 12,            // matches geometry.blockWarp's hardcoded gridSize=12
   blockWarpStrengthX: 0.12,
   blockWarpStrengthY: 0.06,
   blockWarpSeed: 13,
   rOffset: [0.03, 0],
   bOffset: [-0.03, 0],
-  noiseFreq: 20,
+  noiseFreq: 5,             // must be < blockSize(12) so clusters span multiple blocks
   noiseSeed: 77,
-  maskLow: 0.4,
-  maskHigh: 0.8,
-  contrast: 1.8,
-  saturation: 1.5,
+  maskLow: 0.40,            // narrow range → near-binary mask → hard cluster edges
+  maskHigh: 0.58,
+  contrast: 1.15,           // low enough that non-displaced blocks stay close to source
+  saturation: 1.3,
   hue: 0.4,
   mixFactor: 0.6,
 };
 
 /**
  * Data Glitch preset — pixelation + block displacement + color aberration,
- * revealed through a spatially-varying noise mask.
+ * revealed in localized clusters via a spatial noise mask.
  *
- * The noise (freq 20, 2D) is passed through utility.lumaMask to produce a
- * smoothstep-shaped spatial mask. This mask controls which pixels show the
- * glitched/colorized version vs the original — giving irregular "corruption
- * clusters" rather than a uniform blend.
+ * The noise mask defines WHERE corruption clusters appear; geometry.blockWarp
+ * defines the block-shaped corruption within those clusters (~30% of its
+ * 12×12 grid cells are displaced). pixelate uses the same grid size so each
+ * displaced cell moves a whole mosaic block as a unit.
+ *
+ * Key parameters for clean block appearance:
+ * - blockSize=12: aligns with blockWarp's internal grid
+ * - noiseFreq < blockSize: noise clusters must be larger than blocks so the mask
+ *   reveals whole blocks, not sub-block fragments. noiseFreq=5 → cluster ≈ 2-3 blocks wide.
+ * - maskLow/maskHigh: narrow range (≤ 0.2) for hard cluster edges
+ * - contrast: keep low (≤ 1.2) to avoid dark patches in non-displaced blocks
  *
  * ```
- * source → pixelate → blockWarp → channelOffset → colorTransform → mix(b)
- * noise.2d → lumaMask ─────────────────────────────────── factor → mix
- * source ──────────────────────────────────────────────────── a → mix → output
+ * source → pixelate(12) → blockWarp → channelOffset → colorGrade ─── b ──┐
+ * noise.2d → lumaMask ──────────────────────────────────────── factor ──── mix → output
+ * source ───────────────────────────────────────────────────────── a ──────┘
  * ```
  */
 export function createDataGlitch(options: Partial<DataGlitchOptions> = {}): EffectGraph {
@@ -70,6 +85,8 @@ export function createDataGlitch(options: Partial<DataGlitchOptions> = {}): Effe
 
   // ── Distortion chain ───────────────────────────────────────────────────────
 
+  // blockSize=12 aligns with blockWarp's hardcoded 12×12 grid — displaced cells
+  // shift whole mosaic blocks rather than cutting across pixelation boundaries.
   const pixelate: NodeId = g.addNode({
     type: 'utility.pixelate',
     outputType: 'rgba',
@@ -102,6 +119,8 @@ export function createDataGlitch(options: Partial<DataGlitchOptions> = {}): Effe
   });
   g.connect(blockWarp, chroma, 'image');
 
+  // Mild grade — contrast kept low so non-displaced blocks stay close to source
+  // and don't produce dark patches when blended through the noise mask.
   const colorGrade: NodeId = g.addNode({
     type: 'color.transform',
     outputType: 'rgba',
@@ -117,7 +136,8 @@ export function createDataGlitch(options: Partial<DataGlitchOptions> = {}): Effe
 
   // ── Spatial mask ───────────────────────────────────────────────────────────
 
-  // High-frequency 2D noise produces an irregular spatial pattern
+  // 2D noise defines where corruption clusters appear.
+  // noise.2d outputs r=g=b=val, so lumaMask computes luma = val directly.
   const noise: NodeId = g.addNode({
     type: 'noise.2d',
     outputType: 'scalar',
@@ -130,7 +150,8 @@ export function createDataGlitch(options: Partial<DataGlitchOptions> = {}): Effe
     },
   });
 
-  // smoothstep on noise → soft-edged mask of "corrupt clusters"
+  // Narrow smoothstep range → near-binary mask → cluster edges stay hard so
+  // block boundaries are not softened by partial blending at the mask edge.
   const noiseMask: NodeId = g.addNode({
     type: 'utility.lumaMask',
     outputType: 'scalar',

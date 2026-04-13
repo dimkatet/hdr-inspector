@@ -261,6 +261,7 @@ export function ImageCanvas({
         options={{
           ...options,
           transparent: true,
+          hdrMode: true,
           // debug: true,
         }}
         onLoad={handleLoad}

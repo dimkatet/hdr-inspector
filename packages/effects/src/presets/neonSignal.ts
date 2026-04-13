@@ -13,6 +13,7 @@ export interface NeonSignalOptions {
   readonly warpSeed: number;
   /** Chromatic aberration */
   readonly rOffset: readonly [number, number];
+  readonly gOffset: readonly [number, number];
   readonly bOffset: readonly [number, number];
   /** Luma mask range for selective grading */
   readonly maskLow: number;
@@ -43,6 +44,7 @@ const DEFAULTS: NeonSignalOptions = {
   warpOctaves: 3,
   warpSeed: 42,
   rOffset: [0.006, 0],
+  gOffset: [0, 0],
   bOffset: [-0.006, 0],
   maskLow: 0.5,
   maskHigh: 0.85,
@@ -109,7 +111,7 @@ export function createNeonSignal(options: Partial<NeonSignalOptions> = {}): Effe
     inputPorts: ['image'] as const,
     params: {
       rOffset: opts.rOffset,
-      gOffset: [0, 0],
+      gOffset: opts.gOffset,
       bOffset: opts.bOffset,
     },
   });

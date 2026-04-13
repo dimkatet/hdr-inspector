@@ -98,7 +98,9 @@ export function createCyberpunk(options: Partial<CyberpunkOptions> = {}): Effect
   });
   g.connect(source, colorNeon, 'image');
 
-  // Map neon layer luminance through gradient palette
+  // Map neon layer luminance through gradient palette.
+  // color.gradientMap accepts rgba on 'luminance' — the shader computes BT.709 luma
+  // internally (dot(rgb, vec3(0.2126, 0.7152, 0.0722))), so rgba input is correct here.
   const neonGrad: NodeId = g.addNode({
     type: 'color.gradientMap',
     outputType: 'rgba',
