@@ -77,6 +77,17 @@ export type ViewportMutation =
       duration?: number;
     }
   | {
+      type: 'pan.set';
+      /** Target pan X in normalized coordinates (absolute, not a delta) */
+      x: number;
+      /** Target pan Y in normalized coordinates (absolute, not a delta) */
+      y: number;
+      /** Source of the mutation */
+      source: MutationSource;
+      /** Animation duration in ms (optional, uses config default or 0 for instant) */
+      duration?: number;
+    }
+  | {
       type: 'reset';
       /** Source of the mutation */
       source: MutationSource;

@@ -149,11 +149,11 @@ export class ViewportCommands implements ViewportCommandService {
    * @param y Pan Y in normalized coordinates
    */
   setPan(x: number, y: number): void {
-    const current = this.target.getState();
+    this.logger.log('[ViewportCommands] setPan:', { x: x.toFixed(3), y: y.toFixed(3) });
     this.target.applyMutation({
-      type: 'pan',
-      deltaX: x - current.panX,
-      deltaY: y - current.panY,
+      type: 'pan.set',
+      x,
+      y,
       source: 'programmatic',
       duration: 0,
     });

@@ -162,6 +162,8 @@ export class ViewportController implements ViewportFacade, RuntimeService {
         return this.computeZoom(mutation.zoom, mutation.centerX, mutation.centerY);
       case 'pan':
         return this.computePan(mutation.deltaX, mutation.deltaY);
+      case 'pan.set':
+        return this.computePanAbsolute(mutation.x, mutation.y);
       case 'reset':
         return this.computeReset();
       default:
@@ -225,6 +227,21 @@ export class ViewportController implements ViewportFacade, RuntimeService {
       ...this.getTarget(),
       panX: clampPan(newPanX, this.state.zoom),
       panY: clampPan(newPanY, this.state.zoom),
+    };
+  }
+
+  /**
+   * Compute pan to an absolute target position (not a delta).
+   * Used by programmatic setPan()/setViewport() — unlike computePan(), does not
+   * divide by zoom, since x/y are already in normalized pan-space coordinates.
+   * @param x Target pan X in normalized coordinates
+   * @param y Target pan Y in normalized coordinates
+   */
+  private computePanAbsolute(x: number, y: number): ViewportState {
+    return {
+      ...this.getTarget(),
+      panX: clampPan(x, this.state.zoom),
+      panY: clampPan(y, this.state.zoom),
     };
   }
 
